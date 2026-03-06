@@ -2,9 +2,9 @@
 Módulo de navegador: combina Selenium (navegación estructurada)
 y Claude Computer Use (análisis visual) para máxima cobertura.
 """
-
 import base64
 import logging
+import os
 import time
 from io import BytesIO
 
@@ -12,21 +12,19 @@ import anthropic
 from PIL import Image
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
 
 import config
 
 logger = logging.getLogger(__name__)
 
 # IDs reales del portal Woot It — Alajuela Adventist Academy
-SELECTOR_POST_LOGIN  = "button-show-menu"   # solo existe cuando hay sesión activa
-SELECTOR_BTN_MENU    = "button-show-menu"   # abre el menú lateral
-SELECTOR_SUBMENU     = "submenu-usuarios"   # contenedor de estudiantes
-SELECTOR_HEADER      = "header"             # barra superior con nombre y grado
+SELECTOR_POST_LOGIN = "button-show-menu"  # solo existe cuando hay sesión activa
+SELECTOR_BTN_MENU   = "button-show-menu"  # abre el menú lateral
+SELECTOR_SUBMENU    = "submenu-usuarios"  # contenedor de estudiantes
+SELECTOR_HEADER     = "header"            # barra superior con nombre y grado
 
 # Mapeo de estudiante → ID del avatar clicable en #submenu-usuarios
 ESTUDIANTES_IDS = {
@@ -36,16 +34,24 @@ ESTUDIANTES_IDS = {
 
 
 def get_driver(headless: bool = True) -> webdriver.Chrome:
+    """
+    Crea y retorna un WebDriver de Chrome.
+
+    Usa el Selenium Manager integrado (Selenium >= 4.6) para resolver
+    el ChromeDriver automáticamente, evitando el bug de webdriver-manager
+    que apunta a THIRD_PARTY_NOTICES.chromedriver en lugar del binario real.
+    """
     opts = Options()
     if headless:
-        opts.add_argument('--headless=new')
-    opts.add_argument('--no-sandbox')
-    opts.add_argument('--disable-dev-shm-usage')
-    opts.add_argument('--window-size=1920,1080')
-    opts.add_argument('--disable-blink-features=AutomationControlled')
-    opts.add_experimental_option('excludeSwitches', ['enable-automation'])
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=opts)
+        opts.add_argument("--headless=new")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--window-size=1920,1080")
+    opts.add_argument("--disable-blink-features=AutomationControlled")
+    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+
+    # Sin Service() → Selenium Manager resuelve el driver correcto
+    driver = webdriver.Chrome(options=opts)
     driver.implicitly_wait(10)
     return driver
 
@@ -55,14 +61,14 @@ def screenshot_base64(driver: webdriver.Chrome) -> str:
     png = driver.get_screenshot_as_png()
     img = Image.open(BytesIO(png))
     buf = BytesIO()
-    img.save(buf, format='PNG')
-    return base64.standard_b64encode(buf.getvalue()).decode('utf-8')
+    img.save(buf, format="PNG")
+    return base64.standard_b64encode(buf.getvalue()).decode("utf-8")
 
 
 def analizar_pantalla_con_claude(driver: webdriver.Chrome, pregunta: str) -> str:
     """Análisis visual de la pantalla actual mediante Claude Vision."""
     if not config.USAR_COMPUTER_USE:
-        return ''
+        return ""
     try:
         client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
         img_b64 = screenshot_base64(driver)
@@ -70,37 +76,37 @@ def analizar_pantalla_con_claude(driver: webdriver.Chrome, pregunta: str) -> str
             model=config.CLAUDE_MODEL,
             max_tokens=4096,
             messages=[{
-                'role': 'user',
-                'content': [
+                "role": "user",
+                "content": [
                     {
-                        'type': 'image',
-                        'source': {
-                            'type': 'base64',
-                            'media_type': 'image/png',
-                            'data': img_b64
-                        }
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": img_b64,
+                        },
                     },
                     {
-                        'type': 'text',
-                        'text': (
+                        "type": "text",
+                        "text": (
                             "Eres un asistente que analiza capturas de pantalla del portal educativo "
                             "Woot It — Alajuela Adventist Academy (Costa Rica). "
                             "Responde SOLO en español, de forma estructurada y completa. "
                             "Transcribe tablas, listas y mensajes íntegros. "
                             f"PREGUNTA: {pregunta}"
-                        )
-                    }
-                ]
-            }]
+                        ),
+                    },
+                ],
+            }],
         )
         return response.content[0].text
     except Exception as e:
         logger.warning(f"Computer Use falló: {e}. Continuando con Selenium.")
-        return ''
+        return ""
 
 
 def wait_and_get(driver: webdriver.Chrome, url: str,
-                 css_wait: str = 'body', timeout: int = 20) -> bool:
+                 css_wait: str = "body", timeout: int = 20) -> bool:
     """Navega a URL y espera que el elemento indicado esté presente."""
     try:
         driver.get(url)
@@ -121,11 +127,9 @@ def login(driver: webdriver.Chrome) -> bool:
     for intento in range(1, 4):
         try:
             wait_and_get(driver, f"{config.BASE_URL}/login/")
-
             WebDriverWait(driver, 15).until(
                 EC.presence_of_element_located((By.ID, "username"))
             )
-
             campo_user = driver.find_element(By.ID, "username")
             campo_pass = driver.find_element(By.ID, "password")
             btn_login  = driver.find_element(By.ID, "loginBtn")
@@ -140,10 +144,8 @@ def login(driver: webdriver.Chrome) -> bool:
             WebDriverWait(driver, 20).until(
                 EC.presence_of_element_located((By.ID, SELECTOR_POST_LOGIN))
             )
-
             logger.info("Login exitoso.")
             return True
-
         except (NoSuchElementException, TimeoutException) as e:
             logger.warning(f"Login intento {intento} falló: {e}")
             time.sleep(3)
@@ -199,15 +201,15 @@ def cambiar_estudiante(driver: webdriver.Chrome, nombre: str, grado_esperado: st
                 logger.info(f"Cambio a {nombre} confirmado. Header: {header.text.strip()}")
                 return True
 
-            # Si el header no confirma, verificar que el user_id ya no está activo
-            # como señal de que el cambio ocurrió
             logger.warning(f"Header no confirmó grado para {nombre}. Texto: {header.text.strip()}")
 
             # Fallback Computer Use
             if config.USAR_COMPUTER_USE:
-                analisis = analizar_pantalla_con_claude(driver,
-                    f"¿La página muestra que el estudiante activo es {nombre} ({grado_esperado})?")
-                if 'sí' in analisis.lower() or nombre.split()[0].lower() in analisis.lower():
+                analisis = analizar_pantalla_con_claude(
+                    driver,
+                    f"¿La página muestra que el estudiante activo es {nombre} ({grado_esperado})?"
+                )
+                if "sí" in analisis.lower() or nombre.split()[0].lower() in analisis.lower():
                     logger.info(f"Cambio a {nombre} confirmado via Computer Use.")
                     return True
 
