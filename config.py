@@ -19,7 +19,7 @@ HIJO2_ID     = "user240"
 # ── Gmail ────────────────────────────────────
 GMAIL_FROM   = "chdezhidalgo@gmail.com"
 GMAIL_PASS   = os.environ["GMAIL_PASS"]
-GMAIL_TO     = ["bromeror@gmail.com", "chernanezhidalgo@gmail.com"]
+GMAIL_TO     = ["bromeror@gmail.com", "chernandezhidalgo@gmail.com"]
 
 # ── Supabase ─────────────────────────────────
 SUPABASE_URL = os.environ["SUPABASE_URL"]
