@@ -29,14 +29,22 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Instalar dependencias del sistema
+      - name: Instalar Chrome y dependencias del sistema
         run: |
           sudo apt-get update -q
+          # Instalar Chrome directamente desde Google (más confiable en Ubuntu 24.04)
+          wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y /tmp/chrome.deb
+          # Dependencias adicionales compatibles con Ubuntu 24.04 Noble
           sudo apt-get install -y -q \
-            tesseract-ocr tesseract-ocr-spa \
+            tesseract-ocr \
+            tesseract-ocr-spa \
             poppler-utils \
-            chromium-browser chromium-chromedriver \
-            libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libgtk-3-0 \
+            libxss1 \
+            libasound2t64
 
       - name: Instalar dependencias Python
         run: pip install -r requirements.txt
@@ -55,6 +63,9 @@ jobs:
             echo "turno=noche" >> $GITHUB_OUTPUT
           fi
 
+      - name: Crear directorios temporales
+        run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal
+
       - name: Ejecutar revisión
         env:
           WOOTIT_USER:       ${{ secrets.WOOTIT_USER }}
@@ -63,7 +74,6 @@ jobs:
           SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          DISPLAY: ':99'
         run: |
           python revision_matutina.py --turno ${{ steps.turno.outputs.turno }}
 
