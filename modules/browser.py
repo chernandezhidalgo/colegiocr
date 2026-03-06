@@ -32,15 +32,23 @@ ESTUDIANTES_IDS = {
     "Starling Andrés":  "user240",
 }
 
+# Detectar entorno CI (GitHub Actions define CI=true)
+_EN_CI = os.environ.get("CI", "").lower() == "true"
+
 
 def get_driver(headless: bool = True) -> webdriver.Chrome:
     """
     Crea y retorna un WebDriver de Chrome.
 
-    Usa el Selenium Manager integrado (Selenium >= 4.6) para resolver
-    el ChromeDriver automáticamente, evitando el bug de webdriver-manager
-    que apunta a THIRD_PARTY_NOTICES.chromedriver en lugar del binario real.
+    - Usa Selenium Manager integrado (>= 4.6): sin webdriver-manager,
+      sin bug de THIRD_PARTY_NOTICES.
+    - En entornos CI (GitHub Actions) fuerza headless aunque el caller
+      pida headless=False, porque no hay servidor de display disponible.
     """
+    # En CI siempre headless, independientemente del argumento
+    if _EN_CI:
+        headless = True
+
     opts = Options()
     if headless:
         opts.add_argument("--headless=new")
