@@ -1,7 +1,7 @@
-\"\"\"
+"""
 Módulo de navegador: combina Selenium (navegación estructurada)
 y Claude Computer Use (análisis visual) para máxima cobertura.
-\"\"\"
+"""
 import base64
 import logging
 import os
@@ -36,9 +36,9 @@ ESTUDIANTES_IDS = {
 _EN_CI = os.environ.get(\"CI\", \"\").lower() == \"true\"
 
 def get_driver(headless: bool = True) -> webdriver.Chrome:
-    \"\"\"
+    """
     Crea y retorna un WebDriver de Chrome con técnicas anti-detección reforzadas.
-    \"\"\"
+    """
     # En CI siempre headless, independientemente del argumento
     if _EN_CI:
         headless = True
@@ -64,18 +64,18 @@ def get_driver(headless: bool = True) -> webdriver.Chrome:
 
     # Eliminar rastro de webdriver en JS
     driver.execute_cdp_cmd(\"Page.addScriptToEvaluateOnNewDocument\", {
-        \"source\": \"\"\"
+                "source": """
             Object.defineProperty(navigator, 'webdriver', {
                 get: () => undefined
             })
-        \"\"\"
+                """
     })
 
     driver.implicitly_wait(10)
     return driver
 
 def screenshot_base64(driver: webdriver.Chrome) -> str:
-    \"\"\"Captura screenshot y retorna en base64 para Computer Use.\"\"\"
+    """Captura screenshot y retorna en base64 para Computer Use."""
     png = driver.get_screenshot_as_png()
     img = Image.open(BytesIO(png))
     buf = BytesIO()
@@ -83,7 +83,7 @@ def screenshot_base64(driver: webdriver.Chrome) -> str:
     return base64.standard_b64encode(buf.getvalue()).decode(\"utf-8\")
 
 def analizar_pantalla_con_claude(driver: webdriver.Chrome, pregunta: str) -> str:
-    \"\"\"Análisis visual de la pantalla actual mediante Claude Vision.\"\"\"
+    """Análisis visual de la pantalla actual mediante Claude Vision."""
     if not config.USAR_COMPUTER_USE:
         return \"\"
 
@@ -124,7 +124,7 @@ def analizar_pantalla_con_claude(driver: webdriver.Chrome, pregunta: str) -> str
         return \"\"
 
 def wait_and_get(driver: webdriver.Chrome, url: str, css_wait: str = \"body\", timeout: int = 20) -> bool:
-    \"\"\"Navega a URL y espera que el elemento indicado esté presente.\"\"\"
+    """Navega a URL y espera que el elemento indicado esté presente."""
     try:
         driver.get(url)
         WebDriverWait(driver, timeout).until(
@@ -137,7 +137,7 @@ def wait_and_get(driver: webdriver.Chrome, url: str, css_wait: str = \"body\", t
         return False
 
 def login(driver: webdriver.Chrome) -> bool:
-    \"\"\"Realiza login en Woot It. Incluye guardado de capturas en caso de error.\"\"\"
+    """Realiza login en Woot It. Incluye guardado de capturas en caso de error."""
     from selenium.common.exceptions import NoSuchElementException, TimeoutException
     
     for intento in range(1, 4):
@@ -210,7 +210,7 @@ def login(driver: webdriver.Chrome) -> bool:
     return False
 
 def cambiar_estudiante(driver: webdriver.Chrome, nombre: str, grado_esperado: str) -> bool:
-    \"\"\"Cambia al estudiante usando su ID de avatar real.\"\"\"
+    """Cambia al estudiante usando su ID de avatar real."""
     from selenium.common.exceptions import TimeoutException
     
     user_id = ESTUDIANTES_IDS.get(nombre)
