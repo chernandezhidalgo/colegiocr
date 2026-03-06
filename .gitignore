@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.log
+/tmp/
+adjuntos_temp/
+logs/
+basal/
+*.db
+.DS_Store

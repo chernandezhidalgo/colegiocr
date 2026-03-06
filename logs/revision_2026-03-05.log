@@ -1,0 +1,290 @@
+2026-03-05 17:04:15,292 [INFO] __main__: Turno: 1:00 PM | Ventana: desde 2026-03-05 05:00:00-06:00 hasta 2026-03-05 17:04:15.292231-06:00
+2026-03-05 17:04:15,293 [INFO] WDM: ====== WebDriver manager ======
+2026-03-05 17:04:17,309 [INFO] WDM: Get LATEST chromedriver version for google-chrome
+2026-03-05 17:04:17,952 [INFO] WDM: Get LATEST chromedriver version for google-chrome
+2026-03-05 17:04:18,500 [INFO] WDM: There is no [win64] chromedriver "145.0.7632.117" for browser google-chrome "145.0.7632" in cache
+2026-03-05 17:04:18,500 [INFO] WDM: Get LATEST chromedriver version for google-chrome
+2026-03-05 17:04:19,590 [INFO] WDM: WebDriver version 145.0.7632.117 selected
+2026-03-05 17:04:19,599 [INFO] WDM: Modern chrome version https://storage.googleapis.com/chrome-for-testing-public/145.0.7632.117/win32/chromedriver-win32.zip
+2026-03-05 17:04:19,622 [INFO] WDM: About to download new driver from https://storage.googleapis.com/chrome-for-testing-public/145.0.7632.117/win32/chromedriver-win32.zip
+2026-03-05 17:04:20,089 [INFO] WDM: Driver downloading response is 200
+2026-03-05 17:04:21,913 [INFO] WDM: Get LATEST chromedriver version for google-chrome
+2026-03-05 17:04:22,485 [INFO] WDM: Driver has been saved in cache [C:\Users\chern\.wdm\drivers\chromedriver\win64\145.0.7632.117]
+2026-03-05 17:05:01,345 [WARNING] modules.browser: Login intento 1 falló: Message: 
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0x517dd3
+	0x517e14
+	0x321db0
+	0x36c20a
+	0x36c4ab
+	0x3ade32
+	0x38ea84
+	0x3ab621
+	0x38e7d6
+	0x360049
+	0x360e04
+	0x776924
+	0x771bf7
+	0x78f5a0
+	0x530f58
+	0x53891d
+	0x520648
+	0x520812
+	0x50a21a
+	0x767a5d49
+	0x7740d81b
+	0x7740d7a1
+
+2026-03-05 17:05:26,852 [WARNING] modules.browser: Login intento 2 falló: Message: 
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0x517dd3
+	0x517e14
+	0x321db0
+	0x36c20a
+	0x36c4ab
+	0x3ade32
+	0x38ea84
+	0x3ab621
+	0x38e7d6
+	0x360049
+	0x360e04
+	0x776924
+	0x771bf7
+	0x78f5a0
+	0x530f58
+	0x53891d
+	0x520648
+	0x520812
+	0x50a21a
+	0x767a5d49
+	0x7740d81b
+	0x7740d7a1
+
+2026-03-05 17:05:52,356 [WARNING] modules.browser: Login intento 3 falló: Message: 
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0x517dd3
+	0x517e14
+	0x321db0
+	0x36c20a
+	0x36c4ab
+	0x3ade32
+	0x38ea84
+	0x3ab621
+	0x38e7d6
+	0x360049
+	0x360e04
+	0x776924
+	0x771bf7
+	0x78f5a0
+	0x530f58
+	0x53891d
+	0x520648
+	0x520812
+	0x50a21a
+	0x767a5d49
+	0x7740d81b
+	0x7740d7a1
+
+2026-03-05 17:05:55,358 [ERROR] __main__: Login fallido tras 3 intentos.
+2026-03-05 17:05:56,392 [ERROR] modules.mailer: Error enviando correo: (534, b'5.7.9 Application-specific password required. For more information, go to\n5.7.9  https://support.google.com/mail/?p=InvalidSecondFactor 71dfb90a1353d-56afc9186a6sm2872762e0c.5 - gsmtp')
+2026-03-05 21:24:03,215 [INFO] __main__: Turno: 1:00 PM | Ventana: desde 2026-03-05 05:00:00-06:00 hasta 2026-03-05 21:24:03.215114-06:00
+2026-03-05 21:24:03,217 [INFO] WDM: ====== WebDriver manager ======
+2026-03-05 21:24:04,834 [INFO] WDM: Get LATEST chromedriver version for google-chrome
+2026-03-05 21:24:05,335 [INFO] WDM: Get LATEST chromedriver version for google-chrome
+2026-03-05 21:24:05,747 [INFO] WDM: Driver [C:\Users\chern\.wdm\drivers\chromedriver\win64\145.0.7632.117\chromedriver-win32/chromedriver.exe] found in cache
+2026-03-05 21:24:37,605 [WARNING] modules.browser: Login intento 1 falló: Message: 
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0xf57dd3
+	0xf57e14
+	0xd61db0
+	0xdac20a
+	0xdac4ab
+	0xdede32
+	0xdcea84
+	0xdeb621
+	0xdce7d6
+	0xda0049
+	0xda0e04
+	0x11b6924
+	0x11b1bf7
+	0x11cf5a0
+	0xf70f58
+	0xf7891d
+	0xf60648
+	0xf60812
+	0xf4a21a
+	0x767a5d49
+	0x7740d81b
+	0x7740d7a1
+
+2026-03-05 21:25:09,977 [WARNING] modules.browser: Login intento 2 falló: Message: 
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0xf57dd3
+	0xf57e14
+	0xd61db0
+	0xdac20a
+	0xdac4ab
+	0xdede32
+	0xdcea84
+	0xdeb621
+	0xdce7d6
+	0xda0049
+	0xda0e04
+	0x11b6924
+	0x11b1bf7
+	0x11cf5a0
+	0xf70f58
+	0xf7891d
+	0xf60648
+	0xf60812
+	0xf4a21a
+	0x767a5d49
+	0x7740d81b
+	0x7740d7a1
+
+2026-03-05 21:25:36,746 [WARNING] modules.browser: Login intento 3 falló: Message: 
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0xf57dd3
+	0xf57e14
+	0xd61db0
+	0xdac20a
+	0xdac4ab
+	0xdede32
+	0xdcea84
+	0xdeb621
+	0xdce7d6
+	0xda0049
+	0xda0e04
+	0x11b6924
+	0x11b1bf7
+	0x11cf5a0
+	0xf70f58
+	0xf7891d
+	0xf60648
+	0xf60812
+	0xf4a21a
+	0x767a5d49
+	0x7740d81b
+	0x7740d7a1
+
+2026-03-05 21:25:39,747 [ERROR] __main__: Login fallido tras 3 intentos.
+2026-03-05 21:25:40,609 [ERROR] modules.mailer: Error enviando correo: (534, b'5.7.9 Application-specific password required. For more information, go to\n5.7.9  https://support.google.com/mail/?p=InvalidSecondFactor ada2fe7eead31-5ffe88a55fesm259374137.1 - gsmtp')
+2026-03-05 21:32:14,933 [INFO] __main__: Turno: 1:00 PM | Ventana: desde 2026-03-05 05:00:00-06:00 hasta 2026-03-05 21:32:14.933472-06:00
+2026-03-05 21:32:14,934 [INFO] WDM: ====== WebDriver manager ======
+2026-03-05 21:32:16,497 [INFO] WDM: Get LATEST chromedriver version for google-chrome
+2026-03-05 21:32:17,005 [INFO] WDM: Get LATEST chromedriver version for google-chrome
+2026-03-05 21:32:17,445 [INFO] WDM: Driver [C:\Users\chern\.wdm\drivers\chromedriver\win64\145.0.7632.117\chromedriver-win32/chromedriver.exe] found in cache
+2026-03-05 21:32:46,010 [WARNING] modules.browser: Login intento 1 falló: Message: 
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0x1117dd3
+	0x1117e14
+	0xf21db0
+	0xf6c20a
+	0xf6c4ab
+	0xfade32
+	0xf8ea84
+	0xfab621
+	0xf8e7d6
+	0xf60049
+	0xf60e04
+	0x1376924
+	0x1371bf7
+	0x138f5a0
+	0x1130f58
+	0x113891d
+	0x1120648
+	0x1120812
+	0x110a21a
+	0x767a5d49
+	0x7740d81b
+	0x7740d7a1
+
+2026-03-05 21:33:12,230 [WARNING] modules.browser: Login intento 2 falló: Message: 
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0x1117dd3
+	0x1117e14
+	0xf21db0
+	0xf6c20a
+	0xf6c4ab
+	0xfade32
+	0xf8ea84
+	0xfab621
+	0xf8e7d6
+	0xf60049
+	0xf60e04
+	0x1376924
+	0x1371bf7
+	0x138f5a0
+	0x1130f58
+	0x113891d
+	0x1120648
+	0x1120812
+	0x110a21a
+	0x767a5d49
+	0x7740d81b
+	0x7740d7a1
+
+2026-03-05 21:33:38,261 [WARNING] modules.browser: Login intento 3 falló: Message: 
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0x1117dd3
+	0x1117e14
+	0xf21db0
+	0xf6c20a
+	0xf6c4ab
+	0xfade32
+	0xf8ea84
+	0xfab621
+	0xf8e7d6
+	0xf60049
+	0xf60e04
+	0x1376924
+	0x1371bf7
+	0x138f5a0
+	0x1130f58
+	0x113891d
+	0x1120648
+	0x1120812
+	0x110a21a
+	0x767a5d49
+	0x7740d81b
+	0x7740d7a1
+
+2026-03-05 21:33:41,262 [ERROR] __main__: Login fallido tras 3 intentos.
+2026-03-05 21:33:42,906 [INFO] modules.mailer: Correo enviado: ⚠️ ERROR LOGIN - Revisión 1:00 PM
+2026-03-05 21:50:47,550 [INFO] __main__: Turno: 1:00 PM | Ventana: desde 2026-03-05 05:00:00-06:00 hasta 2026-03-05 21:50:47.550579-06:00
+2026-03-05 21:50:47,551 [INFO] WDM: ====== WebDriver manager ======
+2026-03-05 21:50:49,043 [INFO] WDM: Get LATEST chromedriver version for google-chrome
+2026-03-05 21:50:49,530 [INFO] WDM: Get LATEST chromedriver version for google-chrome
+2026-03-05 21:50:49,952 [INFO] WDM: Driver [C:\Users\chern\.wdm\drivers\chromedriver\win64\145.0.7632.117\chromedriver-win32/chromedriver.exe] found in cache
+2026-03-05 21:51:01,596 [INFO] modules.browser: Login exitoso.
+2026-03-05 21:51:01,597 [INFO] modules.wootit: === Revisando Carlos Emiliano Hernández ===
+2026-03-05 21:51:08,500 [INFO] httpx: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 401 Unauthorized"
+2026-03-05 21:51:08,503 [WARNING] modules.browser: Computer Use falló: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CYm9T2B6TQ6uRYG1E5tWz'}. Continuando con Selenium.
+2026-03-05 21:51:12,482 [INFO] httpx: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 401 Unauthorized"
+2026-03-05 21:51:12,483 [WARNING] modules.browser: Computer Use falló: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CYm9TKB3XCFNHNcb8Y5dj'}. Continuando con Selenium.
+2026-03-05 21:51:15,816 [INFO] httpx: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 401 Unauthorized"
+2026-03-05 21:51:15,816 [WARNING] modules.browser: Computer Use falló: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CYm9TZRJLpciSirdCqurE'}. Continuando con Selenium.
+2026-03-05 21:51:18,222 [INFO] httpx: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 401 Unauthorized"
+2026-03-05 21:51:18,224 [WARNING] modules.browser: Computer Use falló: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CYm9TjjuZHEptgWqbmxhF'}. Continuando con Selenium.
+2026-03-05 21:51:20,748 [INFO] httpx: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 401 Unauthorized"
+2026-03-05 21:51:20,749 [WARNING] modules.browser: Computer Use falló: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CYm9TvWZVbxF8TQpfV9Sx'}. Continuando con Selenium.
+2026-03-05 21:51:23,411 [INFO] httpx: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 401 Unauthorized"
+2026-03-05 21:51:23,412 [WARNING] modules.browser: Computer Use falló: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CYm9U7tRLQVq7dUUmc2co'}. Continuando con Selenium.
+2026-03-05 21:51:27,141 [INFO] httpx: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 401 Unauthorized"
+2026-03-05 21:51:27,142 [WARNING] modules.browser: Computer Use falló: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CYm9UPoPED2wJh9Fhv8N1'}. Continuando con Selenium.
+2026-03-05 21:51:33,865 [INFO] httpx: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 401 Unauthorized"
+2026-03-05 21:51:33,866 [WARNING] modules.browser: Computer Use falló: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CYm9UteDvUXAr89mnRrmc'}. Continuando con Selenium.
+2026-03-05 21:51:40,171 [INFO] httpx: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 401 Unauthorized"
+2026-03-05 21:51:40,172 [WARNING] modules.browser: Computer Use falló: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CYm9VMU1pmVXb7iuZghVw'}. Continuando con Selenium.
+2026-03-05 21:51:40,173 [ERROR] __main__: No se pudo cambiar a Starling Andrés.
+2026-03-05 21:51:41,448 [INFO] modules.mailer: Correo enviado: Actualización Colegio - 1:00 PM - 05/03/2026
+2026-03-05 21:51:41,449 [INFO] __main__: Revisión completada y correo enviado.

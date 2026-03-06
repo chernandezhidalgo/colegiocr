@@ -1,0 +1,76 @@
+name: ColegioCR - Revisión Automática
+
+on:
+  schedule:
+    - cron: '0 11 * * *'   # 5:00 AM Costa Rica (UTC-6)
+    - cron: '0 19 * * *'   # 1:00 PM Costa Rica
+    - cron: '0 0 * * *'    # 6:00 PM Costa Rica
+  workflow_dispatch:
+    inputs:
+      turno:
+        description: 'Turno a ejecutar'
+        required: true
+        default: 'mediodia'
+        type: choice
+        options: [manana, mediodia, noche]
+
+jobs:
+  revision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q \
+            tesseract-ocr tesseract-ocr-spa \
+            poppler-utils \
+            chromium-browser chromium-chromedriver \
+            libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1
+
+      - name: Instalar dependencias Python
+        run: pip install -r requirements.txt
+
+      - name: Determinar turno
+        id: turno
+        run: |
+          HOUR=$(date -u +%H)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "turno=${{ github.event.inputs.turno }}" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "11" ]; then
+            echo "turno=manana" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "19" ]; then
+            echo "turno=mediodia" >> $GITHUB_OUTPUT
+          else
+            echo "turno=noche" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Ejecutar revisión
+        env:
+          WOOTIT_USER:       ${{ secrets.WOOTIT_USER }}
+          WOOTIT_PASS:       ${{ secrets.WOOTIT_PASS }}
+          GMAIL_PASS:        ${{ secrets.GMAIL_PASS }}
+          SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DISPLAY: ':99'
+        run: |
+          python revision_matutina.py --turno ${{ steps.turno.outputs.turno }}
+
+      - name: Subir logs como artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ steps.turno.outputs.turno }}-${{ github.run_id }}
+          path: /tmp/logs/
+          retention-days: 30
