@@ -38,12 +38,7 @@ _EN_CI = os.environ.get("CI", "").lower() == "true"
 
 def get_driver(headless: bool = True) -> webdriver.Chrome:
     """
-    Crea y retorna un WebDriver de Chrome.
-
-    - Usa Selenium Manager integrado (>= 4.6): sin webdriver-manager,
-      sin bug de THIRD_PARTY_NOTICES.
-    - En entornos CI (GitHub Actions) fuerza headless aunque el caller
-      pida headless=False, porque no hay servidor de display disponible.
+    Crea y retorna un WebDriver de Chrome con técnicas anti-detección reforzadas.
     """
     # En CI siempre headless, independientemente del argumento
     if _EN_CI:
@@ -52,14 +47,30 @@ def get_driver(headless: bool = True) -> webdriver.Chrome:
     opts = Options()
     if headless:
         opts.add_argument("--headless=new")
+    
+    # Anti-detección y estabilidad
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1920,1080")
     opts.add_argument("--disable-blink-features=AutomationControlled")
+    
+    # User-Agent real para evitar bloqueos
+    opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+    
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+    opts.add_experimental_option("useAutomationExtension", False)
 
-    # Sin Service() → Selenium Manager resuelve el driver correcto
     driver = webdriver.Chrome(options=opts)
+    
+    # Eliminar rastro de webdriver en JS
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": """
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            })
+        """
+    })
+    
     driver.implicitly_wait(10)
     return driver
 
@@ -129,47 +140,63 @@ def wait_and_get(driver: webdriver.Chrome, url: str,
 
 
 def login(driver: webdriver.Chrome) -> bool:
-    """Realiza login en Woot It usando IDs reales del portal. Reintenta hasta 3 veces."""
+    """Realiza login en Woot It. Incluye guardado de capturas en caso de error."""
     from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
     for intento in range(1, 4):
         try:
+            logger.info(f"Intento de login {intento}/3...")
             wait_and_get(driver, f"{config.BASE_URL}/login/")
-            WebDriverWait(driver, 15).until(
-                EC.presence_of_element_located((By.ID, "username"))
-            )
-            campo_user = driver.find_element(By.ID, "username")
+            
+            # Esperar explícitamente por el campo de usuario
+            wait = WebDriverWait(driver, 15)
+            campo_user = wait.until(EC.element_to_be_clickable((By.ID, "username")))
             campo_pass = driver.find_element(By.ID, "password")
             btn_login  = driver.find_element(By.ID, "loginBtn")
 
             campo_user.clear()
             campo_user.send_keys(config.WOOTIT_USER)
+            time.sleep(0.5)
+            
             campo_pass.clear()
             campo_pass.send_keys(config.WOOTIT_PASS)
+            time.sleep(0.5)
+            
             btn_login.click()
+            logger.info("Clic en botón de login realizado.")
 
-            # Confirmar sesión activa: id="button-show-menu" solo existe logueado
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.ID, SELECTOR_POST_LOGIN))
-            )
-            logger.info("Login exitoso.")
-            return True
+            # Esperar a que cambie la URL o aparezca el selector post-login
+            try:
+                WebDriverWait(driver, 20).until(
+                    EC.presence_of_element_located((By.ID, SELECTOR_POST_LOGIN))
+                )
+                logger.info("Login exitoso (ID detectado).")
+                return True
+            except TimeoutException:
+                # Verificar si hay mensajes de error en pantalla
+                try:
+                    error_msg = driver.find_element(By.CLASS_NAME, "error").text
+                    logger.error(f"Error de login visible en portal: {error_msg}")
+                except:
+                    pass
+                
+                # Guardar captura de pantalla para diagnóstico en CI
+                filename = f"error_login_intento_{intento}.png"
+                driver.save_screenshot(os.path.join(config.DIR_LOGS, filename))
+                logger.warning(f"Login no confirmado. Captura guardada como {filename}")
+                
         except (NoSuchElementException, TimeoutException) as e:
-            logger.warning(f"Login intento {intento} falló: {e}")
+            logger.warning(f"Error de elementos en login: {e}")
             time.sleep(3)
         except Exception as e:
-            logger.warning(f"Login intento {intento} falló (error general): {e}")
+            logger.warning(f"Error general en login: {e}")
             time.sleep(3)
 
     return False
 
 
 def cambiar_estudiante(driver: webdriver.Chrome, nombre: str, grado_esperado: str) -> bool:
-    """
-    Cambia al estudiante usando su ID de avatar real en #submenu-usuarios.
-    Carlos Emiliano → id="user213"
-    Starling Andrés  → id="user240"
-    """
+    """Cambia al estudiante usando su ID de avatar real."""
     user_id = ESTUDIANTES_IDS.get(nombre)
     if not user_id:
         logger.error(f"No se encontró ID de usuario para: {nombre}")
