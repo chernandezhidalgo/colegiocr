@@ -51,11 +51,12 @@ def main():
     if hoy > date.fromisoformat(config.FECHA_FIN_VIGENCIA):
         logger.info("Tarea fuera del período de vigencia (después del 20/11/2026). Omitida.")
         sys.exit(0)
-    if hoy < date.fromisoformat(config.FECHA_FIN_VIGENCIA):
-        logger.info("Tarea antes del período de vigencia. Omitida.")
+    hoy = date.today()
+    if hoy > date.fromisoformat(config.FECHA_FIN_VIGENCIA):
+        logger.info("Tarea fuera del período de vigencia (después del 20/11/2026). Omitida.")
         sys.exit(0)
 
-    # ── Calcular ventana temporal ─────────────────────────────────────────
+    # ── Calcular ventana temporal
     cfg_turno = config.VENTANAS[turno]
     label_turno = cfg_turno['label']
     ahora = datetime.now(TZ_CR)
