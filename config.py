@@ -29,12 +29,10 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 
 # ── Anthropic (opcional) ─────────────────
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-USAR_COMPUTER_USE = False
+USAR_COMPUTER_USE = True
 CLAUDE_MODEL      = "claude-opus-4-5"
 
 # ── Vigencia ───────────────────────────
-FECHA_FIN_VIGENCIA = "2026-11-20"
-
 # ── Turnos ────────────────────────────
 VENTANAS = {
     "manana":   {"desde_hora": 18, "delta_dias": -1, "label": "5:00 AM"},
