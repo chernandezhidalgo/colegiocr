@@ -32,6 +32,9 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 USAR_COMPUTER_USE = True
 CLAUDE_MODEL      = "claude-opus-4-5"
 
+# — Vigencia del proceso
+FECHA_FIN_VIGENCIA = "2026-12-31"  # Fecha hasta la cual el proceso es válido
+
 # ── Vigencia ───────────────────────────
 # ── Turnos ────────────────────────────
 VENTANAS = {
