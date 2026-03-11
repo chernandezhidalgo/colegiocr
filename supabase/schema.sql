@@ -5,83 +5,101 @@
 
 -- Mensajes / Comunicados
 CREATE TABLE IF NOT EXISTS mensajes (
-    id              BIGSERIAL PRIMARY KEY,
-    estudiante      TEXT NOT NULL,
-    asunto          TEXT,
-    remitente       TEXT,
-    fecha_mensaje   TIMESTAMPTZ,
-    cuerpo          TEXT,
-    resumen         TEXT,
-    categoria       TEXT,  -- circular, cobro, autorizacion, actividad, disciplinario, evento
-    urgencia        TEXT,  -- alta, media, baja
-    requiere_accion BOOLEAN DEFAULT FALSE,
-    ya_leido        BOOLEAN DEFAULT FALSE,
-    tiene_adjunto   BOOLEAN DEFAULT FALSE,
-    adjunto_nombre  TEXT,
+    id                BIGSERIAL PRIMARY KEY,
+    estudiante        TEXT NOT NULL,
+    asunto            TEXT,
+    remitente         TEXT,
+    fecha_mensaje     TIMESTAMPTZ,
+    cuerpo            TEXT,
+    resumen           TEXT,
+    categoria         TEXT, -- circular, cobro, autorizacion, actividad, disciplinario, evento
+    urgencia          TEXT, -- alta, media, baja
+    requiere_accion   BOOLEAN DEFAULT FALSE,
+    ya_leido          BOOLEAN DEFAULT FALSE,
+    tiene_adjunto     BOOLEAN DEFAULT FALSE,
+    adjunto_nombre    TEXT,
     adjunto_contenido TEXT,
-    fecha_extraccion TIMESTAMPTZ DEFAULT NOW(),
-    turno           TEXT
+    fecha_extraccion  TIMESTAMPTZ DEFAULT NOW(),
+    turno             TEXT
 );
+ALTER TABLE mensajes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_all_mensajes" ON mensajes
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Calificaciones
 CREATE TABLE IF NOT EXISTS calificaciones (
-    id              BIGSERIAL PRIMARY KEY,
-    estudiante      TEXT NOT NULL,
-    materia         TEXT,
-    nota            NUMERIC(5,2),
-    nota_anterior   NUMERIC(5,2),
-    variacion       NUMERIC(5,2),
-    fecha_registro  TIMESTAMPTZ,
+    id               BIGSERIAL PRIMARY KEY,
+    estudiante       TEXT NOT NULL,
+    materia          TEXT,
+    nota             NUMERIC(5,2),
+    nota_anterior    NUMERIC(5,2),
+    variacion        NUMERIC(5,2),
+    fecha_registro   TIMESTAMPTZ,
     fecha_extraccion TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE calificaciones ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_all_calificaciones" ON calificaciones
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Asistencia
 CREATE TABLE IF NOT EXISTS asistencia (
-    id              BIGSERIAL PRIMARY KEY,
-    estudiante      TEXT NOT NULL,
-    fecha           DATE,
-    tipo            TEXT,  -- ausencia, tardia
-    materia         TEXT,
-    periodo         TEXT,
+    id               BIGSERIAL PRIMARY KEY,
+    estudiante       TEXT NOT NULL,
+    fecha            DATE,
+    tipo             TEXT, -- ausencia, tardia
+    materia          TEXT,
+    periodo          TEXT,
     fecha_extraccion TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE asistencia ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_all_asistencia" ON asistencia
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Anotaciones
 CREATE TABLE IF NOT EXISTS anotaciones (
-    id              BIGSERIAL PRIMARY KEY,
-    estudiante      TEXT NOT NULL,
-    fecha           DATE,
-    tipo            TEXT,  -- disciplinaria, academica
-    descripcion     TEXT,
-    profesor        TEXT,
+    id               BIGSERIAL PRIMARY KEY,
+    estudiante       TEXT NOT NULL,
+    fecha            DATE,
+    tipo             TEXT, -- disciplinaria, academica
+    descripcion      TEXT,
+    profesor         TEXT,
     fecha_extraccion TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE anotaciones ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_all_anotaciones" ON anotaciones
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Tareas Aula Virtual
 CREATE TABLE IF NOT EXISTS tareas (
-    id              BIGSERIAL PRIMARY KEY,
-    estudiante      TEXT NOT NULL,
-    materia         TEXT,
-    nombre          TEXT,
-    fecha_limite    DATE,
-    descripcion     TEXT,
-    adjunto_resumen TEXT,
-    estado          TEXT DEFAULT 'pendiente',
+    id               BIGSERIAL PRIMARY KEY,
+    estudiante       TEXT NOT NULL,
+    materia          TEXT,
+    nombre           TEXT,
+    fecha_limite     DATE,
+    descripcion      TEXT,
+    adjunto_resumen  TEXT,
+    estado           TEXT DEFAULT 'pendiente',
     fecha_extraccion TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE tareas ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_all_tareas" ON tareas
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Ejecuciones (log de cada corrida)
 CREATE TABLE IF NOT EXISTS ejecuciones (
     id              BIGSERIAL PRIMARY KEY,
     turno           TEXT,
-    estado          TEXT,  -- exitoso, error_login, error_parcial
+    estado          TEXT, -- exitoso, error_login, error_parcial
     detalle         TEXT,
     correo_enviado  BOOLEAN DEFAULT FALSE,
     fecha_ejecucion TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE ejecuciones ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_all_ejecuciones" ON ejecuciones
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Índices para consultas frecuentes
-CREATE INDEX IF NOT EXISTS idx_mensajes_estudiante ON mensajes(estudiante);
-CREATE INDEX IF NOT EXISTS idx_mensajes_fecha ON mensajes(fecha_mensaje);
+CREATE INDEX IF NOT EXISTS idx_mensajes_estudiante    ON mensajes(estudiante);
+CREATE INDEX IF NOT EXISTS idx_mensajes_fecha         ON mensajes(fecha_mensaje);
 CREATE INDEX IF NOT EXISTS idx_calificaciones_estudiante ON calificaciones(estudiante);
-CREATE INDEX IF NOT EXISTS idx_tareas_fecha_limite ON tareas(fecha_limite);
+CREATE INDEX IF NOT EXISTS idx_tareas_fecha_limite    ON tareas(fecha_limite);
