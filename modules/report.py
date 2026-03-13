@@ -1,6 +1,6 @@
-\"\"\"
+"""
 Módulo de generación del reporte HTML para el correo.
-\"\"\"
+"""
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -36,151 +36,132 @@ def _urgentes(datos_estudiantes: list) -> list:
 
 def _seccion_mensajes(mensajes: list) -> str:
     if not mensajes:
-        return \" Sin mensajes en esta ventana temporal.\
-\"
+        # R1: Distinguir "sin datos" vs "error"
+        return " ℹ️ Sin mensajes nuevos en esta ventana temporal (sección accedida correctamente).\n"
     lineas = []
     for m in mensajes:
         if 'error' in m:
-            lineas.append(f\" ⚠️ {m['error']}\
-\")
+            lineas.append(f" ⚠️ {m['error']}\n")
             continue
         if 'analisis_visual' in m:
-            lineas.append(f\" [ANÁLISIS VISUAL]\
-{m['analisis_visual']}\
-\")
+            lineas.append(f" [ANÁLISIS VISUAL]\n{m['analisis_visual']}\n")
             continue
         adjunto_txt = 'Sin adjunto'
         for adj in m.get('adjuntos', []):
-            adjunto_txt = f\"Adjunto '{adj['nombre']}': {adj['contenido'][:300]}...\"
+            adjunto_txt = f"Adjunto '{adj['nombre']}': {adj['contenido'][:300]}..."
         
         lineas.append(
-            f\" • Asunto: {m.get('asunto', '')}\
-\"
-            f\" De: {m.get('remitente', '')} | Fecha: {m.get('fecha', '')}\
-\"
-            f\" Estado: {m.get('estado', '')}\
-\"
-            f\" Resumen: {m.get('cuerpo', '')[:400]}\
-\"
-            f\" Adjunto: {adjunto_txt}\
-\"
-            f\" Urgencia: {m.get('urgencia', '')} — {m.get('razon_urgencia', '')}\
-\"
+            f" • Asunto: {m.get('asunto', '')}\n"
+            f"   De: {m.get('remitente', '')} | Fecha: {m.get('fecha', '')}\n"
+            f"   Estado: {m.get('estado', '')}\n"
+            f"   Resumen: {m.get('cuerpo', '')[:400]}\n"
+            f"   Adjunto: {adjunto_txt}\n"
+            f"   Urgencia: {m.get('urgencia', '')} — {m.get('razon_urgencia', '')}\n"
         )
-    return \"\
-\".join(lineas)
+    return "\n".join(lineas)
 
 
 def _lista_simple(items: list) -> str:
     if not items:
-        return \" Sin cambios desde el basal.\
-\"
+        # R1: Distinguir "sin datos" vs "error"
+        return " ℹ️ Sin cambios detectados (sección accedida correctamente).\n"
     lineas = []
     for it in items:
         if 'error' in it:
-            lineas.append(f\" ⚠️ {it['error']}\")
+            lineas.append(f" ⚠️ {it['error']}")
         elif 'analisis_visual' in it:
-            lineas.append(f\" {it['analisis_visual']}\")
+            lineas.append(f" {it['analisis_visual']}")
         else:
-            lineas.append(f\" • {it.get('detalle', str(it))}\")
-    return \"\
-\".join(lineas) + \"\
-\"
+            lineas.append(f" • {it.get('detalle', str(it))}")
+    return "\n".join(lineas) + "\n"
 
 
 def _aula_virtual_txt(av: dict) -> str:
     if 'error' in av:
-        return f\" ⚠️ {av['error']}\
-\"
-    lineas = [\" Tareas por entregar:\"]
+        return f" ⚠️ {av['error']}\n"
+    lineas = [" Tareas por entregar:"]
     for t in av.get('tareas', []):
         if 'analisis_visual' in t:
-            lineas.append(f\" {t['analisis_visual']}\")
+            lineas.append(f" {t['analisis_visual']}")
         else:
-            lineas.append(f\" • {t.get('detalle', '')}\")
+            lineas.append(f" • {t.get('detalle', '')}")
     if av.get('analisis_completo'):
-        lineas.append(f\"\
- Análisis completo:\
- {av['analisis_completo']}\")
-    return \"\
-\".join(lineas) + \"\
-\"
+        lineas.append(f"\n Análisis completo:\n {av['analisis_completo']}")
+    return "\n".join(lineas) + "\n"
 
 
 def _seccion_calificaciones(califs: list) -> str:
     if not califs:
-        return \" Sin cambios desde el basal.\
-\"
+        # R1: Distinguir "sin datos" vs "error"
+        return " ℹ️ Sin cambios detectados (sección accedida correctamente).\n"
     lineas = []
     for c in califs:
         if 'error' in c:
-            lineas.append(f\" ⚠️ {c['error']}\")
+            lineas.append(f" ⚠️ {c['error']}")
         elif 'analisis_visual' in c:
-            lineas.append(f\" {c['analisis_visual']}\")
+            lineas.append(f" {c['analisis_visual']}")
         else:
             lineas.append(
-                f\" • {c.get('materia', '')} | Anterior: {c.get('nota_anterior', '')} \"
-                f\"→ Nueva: {c.get('nota_nueva', '')} | Fecha: {c.get('fecha', '')}\"
+                f" • {c.get('materia', '')} | Anterior: {c.get('nota_anterior', '')} "
+                f"→ Nueva: {c.get('nota_nueva', '')} | Fecha: {c.get('fecha', '')}"
             )
-    return \"\
-\".join(lineas) + \"\
-\"
+    return "\n".join(lineas) + "\n"
 
 
 def generar_reporte(label_turno: str, datos_estudiantes: list) -> str:
     ahora = datetime.now(TZ_CR)
     fecha_fmt = ahora.strftime('%d/%m/%Y')
     hora_fmt = ahora.strftime('%H:%M')
-    sep = \"━\" * 50
+    sep = "━" * 50
     
     lineas = [
         sep,
-        f\"REVISIÓN {label_turno} — Alajuela Adventist Academy\",
-        f\"Fecha: {fecha_fmt} | Hora de generación: {hora_fmt} CR\",
+        f"REVISIÓN {label_turno} — Alajuela Adventist Academy",
+        f"Fecha: {fecha_fmt} | Hora de generación: {hora_fmt} CR",
         sep,
-        \"\",
-        \"▶ 1. RESUMEN EJECUTIVO — ATENCIÓN URGENTE\",
-        \"\",
+        "",
+        "▶ 1. RESUMEN EJECUTIVO — ATENCIÓN URGENTE",
+        "",
     ]
     
     urgentes = _urgentes(datos_estudiantes)
     if urgentes:
         for u in urgentes:
-            lineas.append(f\" 🔴 [{u['estudiante']}] {u['tipo']}: {u['asunto']} — {u['detalle']}\")
+            lineas.append(f" 🔴 [{u['estudiante']}] {u['tipo']}: {u['asunto']} — {u['detalle']}")
     else:
-        lineas.append(\" Sin ítems urgentes en esta revisión.\")
-        
+        lineas.append(" Sin ítems urgentes en esta revisión.")
+    
     for est in datos_estudiantes:
         n = est['nombre_corto']
         lineas += [
-            \"\", sep,
-            f\"▶ {n.upper()} HERNÁNDEZ — {est['grado']}\",
-            \"\",
-            f\"📨 COMUNICACIONES ({len([m for m in est.get('mensajes',[]) if 'error' not in m])} mensaje(s))\",
+            "", sep,
+            f"▶ {n.upper()} HERNÁNDEZ — {est['grado']}",
+            "",
+            f"📨 COMUNICACIONES ({len([m for m in est.get('mensajes',[]) if 'error' not in m])} mensaje(s))",
             _seccion_mensajes(est.get('mensajes', [])),
-            \"📊 CALIFICACIONES\",
+            "📊 CALIFICACIONES",
             _seccion_calificaciones(est.get('calificaciones', [])),
-            \"📅 ASISTENCIA\",
+            "📅 ASISTENCIA",
             _lista_simple(est.get('asistencia', [])),
-            \"📋 BOLETA\",
+            "📋 BOLETA",
             _lista_simple(est.get('boleta', [])),
-            \"📝 ANOTACIONES\",
+            "📝 ANOTACIONES",
             _lista_simple(est.get('anotaciones', [])),
-            \"💻 AULA VIRTUAL\",
+            "💻 AULA VIRTUAL",
             _aula_virtual_txt(est.get('aula_virtual', {})),
-            \"🗓️ AGENDA Y TEMARIOS (próximos 15 días)\",
+            "🗓️ AGENDA Y TEMARIOS (próximos 15 días)",
             _lista_simple(est.get('agenda', [])),
         ]
-        
+    
     lineas += [
-        \"\", sep,
-        \"▶ 4. PENDIENTES ACUMULADOS Y FECHAS CRÍTICAS\",
-        \" (Ver secciones de Aula Virtual y Agenda de cada estudiante arriba)\",
-        \"\",
-        f\"Próxima revisión: ver programación de tareas Windows\",
-        f\"Período de vigencia: 05/03/2026 → 20/11/2026\",
+        "", sep,
+        "▶ 4. PENDIENTES ACUMULADOS Y FECHAS CRÍTICAS",
+        " (Ver secciones de Aula Virtual y Agenda de cada estudiante arriba)",
+        "",
+        # R3: Footer corregido con horarios unificados
+        f"Próxima revisión automática: 5:00 AM / 1:00 PM / 6:00 PM (hora CR)",
+        f"Período de vigencia: 05/03/2026 → 20/11/2026",
         sep,
     ]
     
-    return \"\
-\".join(lineas)
+    return "\n".join(lineas)
