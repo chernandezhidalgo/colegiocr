@@ -1,7 +1,6 @@
 """Módulo principal de scraping de Woot It.
 Combina Selenium (estructurado) + Claude Computer Use (visual).
-"""import json
-import logging
+"""import logging
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
