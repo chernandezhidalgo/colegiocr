@@ -1,9 +1,7 @@
 """
-Módulo de envío de correo vía Gmail SMTP con adjuntos.
-BUG [18] CORREGIDO: migrado de SMTP_SSL:465 a STARTTLS:587
-(consistente con configuración que funcionó el 12/03/2026).
+mailer.py — Envío de correo vía Gmail SMTP.
+v3.0.0: soporte HTML + texto plano (multipart/alternative).
 """
-
 import logging
 import os
 import smtplib
@@ -18,14 +16,23 @@ import config
 logger = logging.getLogger(__name__)
 
 
-def enviar_correo(asunto: str, cuerpo: str, adjuntos_rutas: list = None) -> bool:
+def enviar_correo(asunto, cuerpo_html, adjuntos_rutas=None):
+    """
+    Envía correo HTML con fallback a texto plano.
+    Retorna True si el envío fue exitoso.
+    """
     try:
-        msg = MIMEMultipart()
+        msg = MIMEMultipart('alternative')
         msg['From']    = config.GMAIL_FROM
         msg['To']      = ', '.join(config.GMAIL_TO)
         msg['Subject'] = asunto
-        msg.attach(MIMEText(cuerpo, 'plain', 'utf-8'))
 
+        # Versión texto plano como fallback (clientes que no soportan HTML)
+        texto_plano = "Este correo requiere un cliente de correo con soporte HTML."
+        msg.attach(MIMEText(texto_plano, 'plain', 'utf-8'))
+        msg.attach(MIMEText(cuerpo_html, 'html', 'utf-8'))
+
+        # Adjuntos
         for ruta in (adjuntos_rutas or []):
             if ruta and Path(ruta).exists():
                 with open(ruta, 'rb') as f:
@@ -36,7 +43,6 @@ def enviar_correo(asunto: str, cuerpo: str, adjuntos_rutas: list = None) -> bool
                                  f'attachment; filename="{Path(ruta).name}"')
                 msg.attach(parte)
 
-        # BUG [18] CORREGIDO: STARTTLS:587 en lugar de SMTP_SSL:465
         with smtplib.SMTP('smtp.gmail.com', 587) as servidor:
             servidor.ehlo()
             servidor.starttls()
@@ -51,8 +57,13 @@ def enviar_correo(asunto: str, cuerpo: str, adjuntos_rutas: list = None) -> bool
         return False
 
 
-def enviar_alerta_error(turno_label: str, detalle: str):
-    asunto = f"⚠️ ERROR LOGIN - Revisión {turno_label}"
-    cuerpo = (f"No se pudo completar la revisión programada de las {turno_label}.\n\n"
-              f"Detalle del error:\n{detalle}\n\nRevise el log para más información.")
+def enviar_alerta_error(turno_label, detalle):
+    asunto = f"ColegioCR ERROR — {turno_label}"
+    cuerpo = f"""<html><body>
+    <h2 style="color:#D32F2F">Error en revisión ColegioCR</h2>
+    <p><strong>Turno:</strong> {turno_label}</p>
+    <p><strong>Detalle:</strong></p>
+    <pre style="background:#F5F5F5;padding:12px;border-radius:4px">{detalle}</pre>
+    <p>Revisar los logs en GitHub Actions para más información.</p>
+    </body></html>"""
     enviar_correo(asunto, cuerpo)

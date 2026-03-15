@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
-Script principal — ColegioCR: Revisión Programada Completa
-Uso: python revision_matutina.py --turno [manana|mediodia|noche]
-GitHub Actions: 3 ejecuciones diarias a las 5AM / 1PM / 6PM (hora CR)
+revision_matutina.py — ColegioCR v3.0.0
+Ejecución única diaria a las 6:00 PM (hora CR).
 """
-
-import argparse
 import logging
 import os
 import sys
@@ -15,10 +12,10 @@ from zoneinfo import ZoneInfo
 
 import config
 from modules.browser import get_driver, login, cambiar_estudiante
-from modules.clasificador import clasificar_mensaje                          # BUG [21] CORREGIDO: ahora se importa y usa
-from modules.database import registrar_ejecucion, guardar_mensaje, guardar_calificacion  # BUG [20] CORREGIDO
+from modules.clasificador import clasificar_mensaje
+from modules.database import registrar_ejecucion, guardar_mensaje, guardar_calificacion
 from modules.mailer import enviar_correo, enviar_alerta_error
-from modules.report import generar_reporte
+from modules.report import generar_reporte, construir_asunto
 from modules.wootit import revisar_estudiante, cargar_basal
 
 TZ_CR = ZoneInfo('America/Costa_Rica')
@@ -39,35 +36,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _enriquecer_mensajes(mensajes: list) -> list:
-    """
-    BUG [21] CORREGIDO: Aplica clasificador a cada mensaje para asignar
-    categoría, urgencia normalizada y si requiere acción del padre.
-    """
+def _enriquecer_mensajes(mensajes):
+    """Aplica clasificador a cada mensaje para asignar categoría y urgencia normalizada."""
     for msg in mensajes:
         if 'error' in msg or 'analisis_visual' in msg:
             continue
-        clasificacion = clasificar_mensaje(
-            msg.get('asunto', ''),
-            msg.get('cuerpo', '')
-        )
-        msg['categoria']       = clasificacion['categoria']
-        msg['requiere_accion'] = clasificacion['requiere_accion']
-        msg['fecha_limite']    = clasificacion['fecha_limite']
-        msg['monto']           = clasificacion['monto']
-        # Normalizar urgencia a Alta/Media/Baja si clasificador la sobreescribe
-        if clasificacion['urgencia'] == 'alta':
-            msg['urgencia'] = 'Alta'
-        elif clasificacion['urgencia'] == 'media' and msg.get('urgencia') == 'Baja':
-            msg['urgencia'] = 'Media'
+        try:
+            clasificacion = clasificar_mensaje(
+                msg.get('asunto', ''),
+                msg.get('cuerpo', '')
+            )
+            msg['categoria']       = clasificacion['categoria']
+            msg['requiere_accion'] = clasificacion['requiere_accion']
+            msg['fecha_limite']    = clasificacion['fecha_limite']
+            msg['monto']           = clasificacion['monto']
+            if clasificacion['urgencia'] == 'alta':
+                msg['urgencia'] = 'Alta'
+            elif clasificacion['urgencia'] == 'media' and msg.get('urgencia') == 'Baja':
+                msg['urgencia'] = 'Media'
+        except Exception as e:
+            logger.warning(f'Error clasificando mensaje: {e}')
     return mensajes
 
 
-def _persistir_en_supabase(datos_estudiantes: list, turno: str, correo_ok: bool):
-    """
-    BUG [20] CORREGIDO: Persiste en Supabase mensajes, calificaciones
-    y registra la ejecución. Fallo de BD no interrumpe el proceso.
-    """
+def _persistir_en_supabase(datos_estudiantes, turno, correo_ok):
+    """Persiste datos en Supabase. Fallo de BD no interrumpe el proceso."""
     try:
         for est in datos_estudiantes:
             nombre = est.get('estudiante', '')
@@ -75,7 +68,7 @@ def _persistir_en_supabase(datos_estudiantes: list, turno: str, correo_ok: bool)
                 if 'error' not in msg and 'analisis_visual' not in msg:
                     guardar_mensaje(nombre, msg, turno)
             for cal in est.get('calificaciones', []):
-                if 'error' not in cal and 'analisis_visual' not in cal:
+                if isinstance(cal, dict) and 'error' not in cal and 'analisis_visual' not in cal:
                     guardar_calificacion(nombre, cal)
         registrar_ejecucion(
             turno=turno,
@@ -85,50 +78,38 @@ def _persistir_en_supabase(datos_estudiantes: list, turno: str, correo_ok: bool)
         )
         logger.info("Datos persistidos en Supabase.")
     except Exception as e:
-        logger.warning(f"No se pudo persistir en Supabase (no crítico): {e}")
+        logger.warning(f"No se pudo persistir en Supabase (no critico): {e}")
 
 
 def main():
-    # ── Argumento de turno ────────────────────────────────────────────────
-    parser = argparse.ArgumentParser(description='Revisión ColegioCR')
-    parser.add_argument('--turno', required=True,
-                        choices=['manana', 'mediodia', 'noche'],
-                        help='Turno de ejecución')
-    args = parser.parse_args()
-    turno = args.turno
-
     # ── Verificar vigencia ────────────────────────────────────────────────
     hoy = date.today()
     if hoy > date.fromisoformat(config.FECHA_FIN_VIGENCIA):
-        logger.info("Tarea fuera del período de vigencia. Omitida.")
+        logger.info("Tarea fuera del periodo de vigencia. Omitida.")
         sys.exit(0)
 
-    # ── Calcular ventana temporal ─────────────────────────────────────────
-    cfg_turno = config.VENTANAS[turno]
-    label_turno = cfg_turno['label']
+    # ── Ventana temporal: todo el día de hoy ──────────────────────────────
+    # Ejecución única diaria: captura todo lo ocurrido desde las 00:00 de hoy
     ahora = datetime.now(TZ_CR)
-    desde = ahora.replace(
-        hour=cfg_turno['desde_hora'], minute=0, second=0, microsecond=0
-    ) + timedelta(days=cfg_turno['delta_dias'])
-    logger.info(f"Turno: {label_turno} | Ventana: desde {desde} hasta {ahora}")
+    desde = ahora.replace(hour=0, minute=0, second=0, microsecond=0)
+    logger.info(f"Revision diaria | Ventana: {desde.date()} 00:00 hasta {ahora.strftime('%H:%M')}")
 
     # ── Iniciar navegador ─────────────────────────────────────────────────
-    # BUG [14] CORREGIDO: headless automático en CI (GitHub Actions), False en local
-    en_ci = os.environ.get("CI", "").lower() == "true"
+    en_ci  = os.environ.get("CI", "").lower() == "true"
     driver = get_driver(headless=en_ci)
     adjuntos_para_correo = []
-    datos_estudiantes = []
-    correo_ok = False
+    datos_estudiantes    = []
+    correo_ok            = False
 
     try:
         # ── Login ─────────────────────────────────────────────────────────
         if not login(driver):
             logger.error("Login fallido tras 3 intentos.")
-            registrar_ejecucion(turno, 'error_login', 'Login falló 3 veces consecutivas.', False)
-            enviar_alerta_error(label_turno, "Login falló 3 veces consecutivas.")
+            registrar_ejecucion('noche', 'error_login', 'Login fallo 3 veces.', False)
+            enviar_alerta_error('6:00 PM', "Login fallo 3 veces consecutivas.")
             sys.exit(1)
 
-        # ── Estudiante 1: Carlos Emiliano (7° Grado) ──────────────────────
+        # ── Estudiante 1: Carlos Emiliano ─────────────────────────────────
         basal1 = cargar_basal('emiliano')
         datos1 = revisar_estudiante(
             driver,
@@ -138,7 +119,7 @@ def main():
             ventana_desde=desde,
             basal=basal1
         )
-        datos1['mensajes'] = _enriquecer_mensajes(datos1.get('mensajes', []))  # BUG [21]
+        datos1['mensajes'] = _enriquecer_mensajes(datos1.get('mensajes', []))
         datos_estudiantes.append(datos1)
 
         for msg in datos1.get('mensajes', []):
@@ -146,16 +127,16 @@ def main():
                 if adj.get('ruta'):
                     adjuntos_para_correo.append(adj['ruta'])
 
-        # ── Cambiar a Estudiante 2: Starling Andrés (8° Grado) ────────────
+        # ── Cambiar a Estudiante 2: Starling Andrés ───────────────────────
         cambio_ok = cambiar_estudiante(driver, 'Starling Andrés', '8° Grado')
         if not cambio_ok:
-            logger.error("No se pudo cambiar a Starling Andrés.")
+            logger.error("No se pudo cambiar a Starling Andres.")
             datos_estudiantes.append({
                 'estudiante': config.HIJO2_LABEL,
                 'nombre_corto': config.HIJO2_NOMBRE,
                 'grado': config.HIJO2_GRADO,
                 'mensajes': [{'error': 'No procesado — error en cambio de perfil'}],
-                'calificaciones': [], 'asistencia': [], 'boleta': [],
+                'calificaciones': [], 'asistencia': {}, 'boleta': [],
                 'anotaciones': [], 'aula_virtual': {}, 'agenda': [],
             })
         else:
@@ -168,31 +149,33 @@ def main():
                 ventana_desde=desde,
                 basal=basal2
             )
-            datos2['mensajes'] = _enriquecer_mensajes(datos2.get('mensajes', []))  # BUG [21]
+            datos2['mensajes'] = _enriquecer_mensajes(datos2.get('mensajes', []))
             datos_estudiantes.append(datos2)
             for msg in datos2.get('mensajes', []):
                 for adj in msg.get('adjuntos', []):
                     if adj.get('ruta'):
                         adjuntos_para_correo.append(adj['ruta'])
 
-        # ── Generar reporte y enviar correo ───────────────────────────────
-        cuerpo = generar_reporte(label_turno, datos_estudiantes)
-        fecha_fmt = datetime.now(TZ_CR).strftime('%d/%m/%Y')
-        asunto = f"Actualización Colegio - {label_turno} - {fecha_fmt}"
-        correo_ok = enviar_correo(asunto, cuerpo, adjuntos_para_correo)
-        logger.info("Revisión completada y correo enviado.")
+        # ── Generar reporte HTML y enviar ─────────────────────────────────
+        cuerpo_html = generar_reporte('6:00 PM', datos_estudiantes)
+        asunto      = construir_asunto(datos_estudiantes)
+        correo_ok   = enviar_correo(asunto, cuerpo_html, adjuntos_para_correo)
+
+        if correo_ok:
+            logger.info(f"Correo enviado: {asunto}")
+        else:
+            logger.error("Fallo al enviar correo.")
 
     except Exception as e:
-        logger.exception(f"Error inesperado en ejecución principal: {e}")
+        logger.exception(f"Error inesperado: {e}")
         try:
-            registrar_ejecucion(turno, 'error_critico', str(e), False)
+            registrar_ejecucion('noche', 'error_critico', str(e), False)
         except Exception:
             pass
-        enviar_alerta_error(label_turno, str(e))
+        enviar_alerta_error('6:00 PM', str(e))
     finally:
-        # BUG [20] CORREGIDO: persistir siempre, incluso si hubo errores parciales
         if datos_estudiantes:
-            _persistir_en_supabase(datos_estudiantes, turno, correo_ok)
+            _persistir_en_supabase(datos_estudiantes, 'noche', correo_ok)
         driver.quit()
 
 

@@ -1,3 +1,7 @@
+"""
+config.py — Configuración centralizada de ColegioCR v3.0.0
+Ejecución única diaria a las 6:00 PM (hora CR).
+"""
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -29,19 +33,11 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 
 # ── Anthropic ──────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-USAR_COMPUTER_USE = bool(ANTHROPIC_API_KEY)          # BUG [16] CORREGIDO: False si no hay key
-CLAUDE_MODEL      = "claude-opus-4-5"                # BUG [17]: modelo válido confirmado
+USAR_COMPUTER_USE = bool(ANTHROPIC_API_KEY)
+CLAUDE_MODEL      = "claude-opus-4-5"
 
 # ── Vigencia ───────────────────────────────────────────────────────────────
-# BUG [15] CORREGIDO: fecha real del período académico (era "2026-12-31")
 FECHA_FIN_VIGENCIA = "2026-11-20"
-
-# ── Turnos ─────────────────────────────────────────────────────────────────
-VENTANAS = {
-    "manana":   {"desde_hora": 18, "delta_dias": -1, "label": "5:00 AM"},
-    "mediodia": {"desde_hora":  5, "delta_dias":  0, "label": "1:00 PM"},
-    "noche":    {"desde_hora": 13, "delta_dias":  0, "label": "6:00 PM"},
-}
 
 # ── Rutas locales ──────────────────────────────────────────────────────────
 DIR_ADJUNTOS  = "/tmp/adjuntos"
