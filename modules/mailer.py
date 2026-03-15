@@ -1,5 +1,7 @@
 """
 Módulo de envío de correo vía Gmail SMTP con adjuntos.
+BUG [18] CORREGIDO: migrado de SMTP_SSL:465 a STARTTLS:587
+(consistente con configuración que funcionó el 12/03/2026).
 """
 
 import logging
@@ -34,7 +36,11 @@ def enviar_correo(asunto: str, cuerpo: str, adjuntos_rutas: list = None) -> bool
                                  f'attachment; filename="{Path(ruta).name}"')
                 msg.attach(parte)
 
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as servidor:
+        # BUG [18] CORREGIDO: STARTTLS:587 en lugar de SMTP_SSL:465
+        with smtplib.SMTP('smtp.gmail.com', 587) as servidor:
+            servidor.ehlo()
+            servidor.starttls()
+            servidor.ehlo()
             servidor.login(config.GMAIL_FROM, config.GMAIL_PASS)
             servidor.sendmail(config.GMAIL_FROM, config.GMAIL_TO, msg.as_bytes())
 

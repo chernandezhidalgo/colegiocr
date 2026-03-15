@@ -9,6 +9,7 @@ import time
 from io import BytesIO
 import anthropic
 from PIL import Image
+import chromedriver_autoinstaller
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -39,6 +40,7 @@ def get_driver(headless: bool = True) -> webdriver.Chrome:
     """
     if _EN_CI:
         headless = True
+    chromedriver_autoinstaller.install()  # BUG [24] CORREGIDO: chromedriver compatible con Chrome instalado
     opts = Options()
     if headless:
         opts.add_argument("--headless=new")

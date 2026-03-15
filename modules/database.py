@@ -2,6 +2,7 @@
 Módulo de base de datos: integración con Supabase.
 Guarda historial de mensajes, calificaciones, asistencia,
 anotaciones, tareas y registro de ejecuciones.
+BUG [19] CORREGIDO: float(nota) protegido con try/except.
 """
 
 import logging
@@ -16,6 +17,7 @@ TZ_CR = ZoneInfo("America/Costa_Rica")
 
 _client: Client = None
 
+
 def get_client() -> Client:
     global _client
     if _client is None:
@@ -26,20 +28,20 @@ def get_client() -> Client:
 def guardar_mensaje(estudiante: str, msg: dict, turno: str):
     try:
         get_client().table("mensajes").insert({
-            "estudiante":      estudiante,
-            "asunto":          msg.get("asunto"),
-            "remitente":       msg.get("remitente"),
-            "fecha_mensaje":   msg.get("fecha"),
-            "cuerpo":          msg.get("cuerpo"),
-            "resumen":         msg.get("resumen"),
-            "categoria":       msg.get("categoria"),
-            "urgencia":        msg.get("urgencia"),
-            "requiere_accion": msg.get("requiere_accion", False),
-            "ya_leido":        msg.get("ya_leido", False),
-            "tiene_adjunto":   msg.get("tiene_adjunto", False),
-            "adjunto_nombre":  msg.get("adjunto_nombre"),
+            "estudiante":        estudiante,
+            "asunto":            msg.get("asunto"),
+            "remitente":         msg.get("remitente"),
+            "fecha_mensaje":     msg.get("fecha"),
+            "cuerpo":            msg.get("cuerpo"),
+            "resumen":           msg.get("resumen"),
+            "categoria":         msg.get("categoria"),
+            "urgencia":          msg.get("urgencia"),
+            "requiere_accion":   msg.get("requiere_accion", False),
+            "ya_leido":          msg.get("ya_leido", False),
+            "tiene_adjunto":     bool(msg.get("adjuntos")),
+            "adjunto_nombre":    msg.get("adjunto_nombre"),
             "adjunto_contenido": msg.get("adjunto_contenido"),
-            "turno":           turno,
+            "turno":             turno,
         }).execute()
     except Exception as e:
         logger.error(f"DB error guardando mensaje: {e}")
@@ -47,9 +49,17 @@ def guardar_mensaje(estudiante: str, msg: dict, turno: str):
 
 def guardar_calificacion(estudiante: str, cal: dict):
     try:
-        nota = cal.get("nota")
+        nota     = cal.get("nota_nueva") or cal.get("nota")
         nota_ant = cal.get("nota_anterior")
-        variacion = round(float(nota) - float(nota_ant), 2) if nota and nota_ant else None
+
+        # BUG [19] CORREGIDO: conversión segura a float
+        variacion = None
+        try:
+            if nota and nota_ant and nota_ant != '(sin basal)':
+                variacion = round(float(nota) - float(nota_ant), 2)
+        except (ValueError, TypeError):
+            variacion = None
+
         get_client().table("calificaciones").insert({
             "estudiante":     estudiante,
             "materia":        cal.get("materia"),
