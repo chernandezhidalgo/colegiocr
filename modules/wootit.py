@@ -3,6 +3,7 @@ Combina Selenium (estructurado) + Claude Computer Use (visual).
 """
 import logging
 import time
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
