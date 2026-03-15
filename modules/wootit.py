@@ -140,8 +140,8 @@ def revisar_mensajes(driver, ventana_desde: datetime, basal: dict) -> list:
                 'estado': '[YA LEÍDO POR EL PADRE]' if leido else '[NUEVO]',
             })
         except Exception as e:
-            logger.warning(f\"Error procesando mensaje: {e}\")
-            
+            logger.warning(f'Error procesando mensaje: {e}')
+          
     if not resultados:
         analisis = analizar_pantalla_con_claude(driver,
             'Lista todos los mensajes visibles con: asunto, remitente, fecha, ' +
