@@ -1,18 +1,9 @@
-name: ColegioCR - Revisión Automática
+name: ColegioCR - Revisión Diaria 6PM
 
 on:
   schedule:
-    schedule:
-     - cron: '0 0 * * 1-5'   # 6:00 PM Costa Rica (UTC-6)
-   
-  workflow_dispatch:
-    inputs:
-      turno:
-        description: 'Turno a ejecutar'
-        required: true
-        default: 'mediodia'
-        type: choice
-        options: [manana, mediodia, noche]
+    - cron: '0 0 * * 1-5'   # 6:00 PM Costa Rica (UTC-6 = 00:00 UTC) — Lunes a Viernes
+  workflow_dispatch:          # Ejecución manual para pruebas
 
 jobs:
   revision:
@@ -32,10 +23,8 @@ jobs:
       - name: Instalar Chrome y dependencias del sistema
         run: |
           sudo apt-get update -q
-          # Instalar Chrome directamente desde Google (más confiable en Ubuntu 24.04)
           wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt-get install -y /tmp/chrome.deb
-          # Dependencias adicionales compatibles con Ubuntu 24.04 Noble
           sudo apt-get install -y -q \
             tesseract-ocr \
             tesseract-ocr-spa \
@@ -43,31 +32,18 @@ jobs:
             libnss3 \
             libatk-bridge2.0-0 \
             libgtk-3-0 \
-            libxss1 \
-            libasound2t64
+            libxss1 || true
+          sudo apt-get install -y libasound2t64 2>/dev/null || sudo apt-get install -y libasound2 2>/dev/null || true
 
       - name: Instalar dependencias Python
         run: pip install -r requirements.txt
 
-      - name: Determinar turno
-        id: turno
-        run: |
-          HOUR=$(date -u +%H)
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "turno=${{ github.event.inputs.turno }}" >> $GITHUB_OUTPUT
-          elif [ "$HOUR" = "11" ]; then
-            echo "turno=manana" >> $GITHUB_OUTPUT
-          elif [ "$HOUR" = "19" ]; then
-            echo "turno=mediodia" >> $GITHUB_OUTPUT
-          else
-            echo "turno=noche" >> $GITHUB_OUTPUT
-          fi
-
       - name: Crear directorios temporales
         run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal
 
-      - name: Ejecutar revisión
+      - name: Ejecutar revisión diaria
         env:
+          CI: "true"
           WOOTIT_USER:       ${{ secrets.WOOTIT_USER }}
           WOOTIT_PASS:       ${{ secrets.WOOTIT_PASS }}
           GMAIL_PASS:        ${{ secrets.GMAIL_PASS }}
@@ -75,12 +51,12 @@ jobs:
           SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          python revision_matutina.py --turno ${{ steps.turno.outputs.turno }}
+          python revision_matutina.py
 
       - name: Subir logs como artefacto
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: logs-${{ steps.turno.outputs.turno }}-${{ github.run_id }}
+          name: logs-${{ github.run_id }}
           path: /tmp/logs/
           retention-days: 30
