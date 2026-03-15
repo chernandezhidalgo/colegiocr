@@ -1,0 +1,63 @@
+name: ColegioCR - Levantamiento Basal
+
+on:
+  workflow_dispatch:   # Solo manual — se ejecuta una vez como punto de partida
+
+jobs:
+  basal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # Más tiempo: analiza 4 semanas completas
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Instalar Chrome (método oficial GitHub Actions)
+        uses: browser-actions/setup-chrome@latest
+        with:
+          chrome-version: stable
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q tesseract-ocr tesseract-ocr-spa poppler-utils || true
+
+      - name: Instalar dependencias Python
+        run: pip install -r requirements.txt
+
+      - name: Crear directorios
+        run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal
+
+      - name: Verificar instalación
+        run: |
+          python -c "import selenium; print('selenium', selenium.__version__)"
+          python -c "import anthropic; print('anthropic', anthropic.__version__)"
+          python -c "import chromedriver_autoinstaller; chromedriver_autoinstaller.install(); print('chromedriver OK')"
+
+      - name: Ejecutar levantamiento basal
+        env:
+          CI: "true"
+          WOOTIT_USER:       ${{ secrets.WOOTIT_USER }}
+          WOOTIT_PASS:       ${{ secrets.WOOTIT_PASS }}
+          GMAIL_PASS:        ${{ secrets.GMAIL_PASS }}
+          SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python basal.py
+
+      - name: Subir logs y basal como artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: basal-${{ github.run_id }}
+          path: |
+            /tmp/logs/
+            /tmp/basal/
+          retention-days: 90
