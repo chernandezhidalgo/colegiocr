@@ -422,13 +422,28 @@ def main():
             'nombre_corto': config.HIJO1_NOMBRE,
             'grado':        config.HIJO1_GRADO,
         }
+        # Capturar screenshots diagnósticos de cada sección
+        import os as _os
+        _os.makedirs('/tmp/screenshots', exist_ok=True)
+
         datos1['mensajes']       = _enriquecer_mensajes(revisar_mensajes(driver, ventana_desde, basal_vacio))
+        driver.save_screenshot('/tmp/screenshots/carlos_mensajes.png')
+
         datos1['calificaciones'] = revisar_calificaciones(driver, basal_vacio)
+        driver.save_screenshot('/tmp/screenshots/carlos_calificaciones.png')
+
         datos1['asistencia']     = revisar_asistencia(driver, basal_vacio)
+        driver.save_screenshot('/tmp/screenshots/carlos_asistencia.png')
+
         datos1['boleta']         = revisar_seccion_simple(driver, 'boleta',     basal_vacio, 'Lista todos los registros de conducta y boleta disponibles.')
+        driver.save_screenshot('/tmp/screenshots/carlos_boleta.png')
+
         datos1['anotaciones']    = revisar_seccion_simple(driver, 'anotaciones', basal_vacio, 'Lista todas las anotaciones con fecha, tipo, descripcion y profesor.')
         datos1['aula_virtual']   = revisar_aula_virtual(driver, ventana_desde, basal_vacio)
+        driver.save_screenshot('/tmp/screenshots/carlos_aula_virtual.png')
+
         datos1['agenda']         = revisar_agenda(driver, basal_vacio)
+        driver.save_screenshot('/tmp/screenshots/carlos_agenda.png')
         datos_estudiantes.append(datos1)
 
         # Guardar basal de Carlos
@@ -460,12 +475,17 @@ def main():
                 'grado':        config.HIJO2_GRADO,
             }
             datos2['mensajes']       = _enriquecer_mensajes(revisar_mensajes(driver, ventana_desde, basal_vacio))
+            driver.save_screenshot('/tmp/screenshots/starling_mensajes.png')
             datos2['calificaciones'] = revisar_calificaciones(driver, basal_vacio)
+            driver.save_screenshot('/tmp/screenshots/starling_calificaciones.png')
             datos2['asistencia']     = revisar_asistencia(driver, basal_vacio)
+            driver.save_screenshot('/tmp/screenshots/starling_asistencia.png')
             datos2['boleta']         = revisar_seccion_simple(driver, 'boleta',      basal_vacio, 'Lista todos los registros de conducta.')
             datos2['anotaciones']    = revisar_seccion_simple(driver, 'anotaciones',  basal_vacio, 'Lista todas las anotaciones.')
             datos2['aula_virtual']   = revisar_aula_virtual(driver, ventana_desde, basal_vacio)
+            driver.save_screenshot('/tmp/screenshots/starling_aula_virtual.png')
             datos2['agenda']         = revisar_agenda(driver, basal_vacio)
+            driver.save_screenshot('/tmp/screenshots/starling_agenda.png')
             datos_estudiantes.append(datos2)
 
             guardar_basal('andres', {

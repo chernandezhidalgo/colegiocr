@@ -1,12 +1,12 @@
 name: ColegioCR - Levantamiento Basal
 
 on:
-  workflow_dispatch:   # Solo manual — se ejecuta una vez como punto de partida
+  workflow_dispatch:
 
 jobs:
   basal:
     runs-on: ubuntu-latest
-    timeout-minutes: 45   # Más tiempo: analiza 4 semanas completas
+    timeout-minutes: 45
 
     steps:
       - name: Checkout código
@@ -32,13 +32,20 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Crear directorios
-        run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal
+        run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal /tmp/screenshots
 
-      - name: Verificar instalación
+      - name: Verificar instalación y secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           python -c "import selenium; print('selenium', selenium.__version__)"
           python -c "import anthropic; print('anthropic', anthropic.__version__)"
           python -c "import chromedriver_autoinstaller; chromedriver_autoinstaller.install(); print('chromedriver OK')"
+          python -c "
+          import os
+          key = os.environ.get('ANTHROPIC_API_KEY','')
+          print('ANTHROPIC_API_KEY:', 'CONFIGURADA (' + str(len(key)) + ' chars)' if key else 'VACÍA - Computer Use desactivado')
+          "
 
       - name: Ejecutar levantamiento basal
         env:
@@ -52,7 +59,7 @@ jobs:
         run: |
           python basal.py
 
-      - name: Subir logs y basal como artefacto
+      - name: Subir logs, screenshots y archivos basal como artefacto
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -60,4 +67,5 @@ jobs:
           path: |
             /tmp/logs/
             /tmp/basal/
+            /tmp/screenshots/
           retention-days: 90
