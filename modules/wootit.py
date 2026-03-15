@@ -104,7 +104,7 @@ def revisar_mensajes(driver, ventana_desde: datetime, basal: dict) -> list:
                     for adj in soup_msg.select('a[href*=\".pdf\"], a[href*=\".jpg\"], a[href*=\".png\"], ' +
                                              'a[href*=\".jpeg\"], a[href*=\".gif\"], a[href*=\".webp\"]'):
                         adj_url = config.BASE_URL + adj['href'] if adj['href'].startswith('/') else adj['href']
-                                                adj_nombre = f"{asunto[:30]}_{adj['href'].split('/')[-1]}"
+                                            adj_nombre = f"{asunto[:30]}_{adj['href'].split('/')[-1]}"
                         adj_datos = procesar_adjunto(adj_url, adj_nombre, _cookies(driver))
                         adjuntos_procesados.append(adj_datos)
             
