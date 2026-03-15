@@ -109,7 +109,7 @@ def revisar_mensajes(driver, ventana_desde: datetime, basal: dict) -> list:
                         adj_datos = procesar_adjunto(adj_url, adj_nombre, _cookies(driver))
                         adjuntos_procesados.append(adj_datos)
             
-            texto_completo = (asunto + ' ' + cuerpo).lower()
+            o_completo = (asunto + ' ' + cuerpo).lower()
             urgencia = 'Baja'
             razon_urgencia = 'Sin palabras clave de alerta'
             palabras_alta = ['urgente', 'pago', 'suspensión', 'expulsión', 'reunión',
