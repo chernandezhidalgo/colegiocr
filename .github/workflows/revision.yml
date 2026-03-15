@@ -20,26 +20,31 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Instalar Chrome y dependencias del sistema
+      - name: Instalar Chrome (método oficial GitHub Actions)
+        uses: browser-actions/setup-chrome@latest
+        with:
+          chrome-version: stable
+
+      - name: Instalar dependencias del sistema
         run: |
           sudo apt-get update -q
-          wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo apt-get install -y /tmp/chrome.deb
           sudo apt-get install -y -q \
             tesseract-ocr \
             tesseract-ocr-spa \
-            poppler-utils \
-            libnss3 \
-            libatk-bridge2.0-0 \
-            libgtk-3-0 \
-            libxss1 || true
-          sudo apt-get install -y libasound2t64 2>/dev/null || sudo apt-get install -y libasound2 2>/dev/null || true
+            poppler-utils || true
 
       - name: Instalar dependencias Python
         run: pip install -r requirements.txt
 
       - name: Crear directorios temporales
         run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal
+
+      - name: Verificar instalación
+        run: |
+          python -c "import selenium; print('selenium', selenium.__version__)"
+          python -c "import anthropic; print('anthropic', anthropic.__version__)"
+          python -c "import chromedriver_autoinstaller; chromedriver_autoinstaller.install(); print('chromedriver OK')"
+          google-chrome --version || chromium --version || echo "Chrome disponible via setup-chrome"
 
       - name: Ejecutar revisión diaria
         env:

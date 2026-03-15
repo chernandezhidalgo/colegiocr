@@ -6,7 +6,7 @@ Ejecución única diaria a las 6:00 PM (hora CR).
 import logging
 import os
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
