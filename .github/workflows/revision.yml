@@ -20,14 +20,16 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Instalar Chrome (método oficial GitHub Actions)
-        uses: browser-actions/setup-chrome@latest
-        with:
-          chrome-version: stable
+      - name: Instalar Chrome estable
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y google-chrome-stable 2>/dev/null || \
+          (wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+           sudo apt-get install -y /tmp/chrome.deb)
+          google-chrome --version
 
       - name: Instalar dependencias del sistema
         run: |
-          sudo apt-get update -q
           sudo apt-get install -y -q tesseract-ocr tesseract-ocr-spa poppler-utils || true
 
       - name: Instalar dependencias Python
@@ -47,10 +49,9 @@ jobs:
           SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          python revision_matutina.py
+        run: python revision_matutina.py
 
-      - name: Subir logs como artefacto
+      - name: Subir logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
