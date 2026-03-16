@@ -142,19 +142,19 @@ def _navegar_por_menu(driver, seccion_key):
                     if href and 'login' not in href.lower():
                         logger.info(f"Link directo encontrado para {seccion_key}: {href}")
                         link.click()
-                        time.sleep(3)
+                        time.sleep(2)
                         return True
         except Exception:
             pass
 
     # Abrir menú lateral y buscar link
     try:
-        wait = WebDriverWait(driver, 10)
+        wait = WebDriverWait(driver, 5)
         # Intentar abrir el menú
         try:
             btn = wait.until(EC.element_to_be_clickable((By.ID, SELECTOR_BTN_MENU)))
             btn.click()
-            time.sleep(2)
+            time.sleep(1)
         except TimeoutException:
             # El menú puede ya estar abierto o tener otro selector
             for sel in ['.menu-toggle', '.hamburger', '.sidebar-toggle',
@@ -177,7 +177,7 @@ def _navegar_por_menu(driver, seccion_key):
                     if href and 'login' not in href.lower():
                         logger.info(f"Link en menú encontrado para {seccion_key}: {href}")
                         link.click()
-                        time.sleep(3)
+                        time.sleep(2)
                         return True
     except Exception as e:
         logger.warning(f"_navegar_por_menu({seccion_key}): {e}")
@@ -363,7 +363,7 @@ def cambiar_estudiante(driver, nombre, grado_esperado):
             # Abrir menú y click en avatar
             btn = wait.until(EC.element_to_be_clickable((By.ID, SELECTOR_BTN_MENU)))
             btn.click()
-            time.sleep(2)
+            time.sleep(1)
 
             wait.until(EC.visibility_of_element_located((By.ID, SELECTOR_SUBMENU)))
             avatar = wait.until(EC.element_to_be_clickable((By.ID, user_id)))

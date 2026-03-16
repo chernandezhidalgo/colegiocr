@@ -117,7 +117,7 @@ def guardar_basal(key, datos):
 
 # ─── NAVEGACIÓN INTELIGENTE CON ESPERA DE CONTENIDO ─────────────────────────
 
-def _navegar_y_esperar(driver, url, seccion_key, timeout_contenido=15):
+def _navegar_y_esperar(driver, url, seccion_key, timeout_contenido=5):
     """
     Navega a la URL y espera que el CONTENIDO DINÁMICO cargue, no solo el body.
     Estrategia en cascada:
@@ -153,8 +153,8 @@ def _navegar_y_esperar(driver, url, seccion_key, timeout_contenido=15):
     # Ningún selector coincidió → esperar tiempo fijo y continuar igual
     logger.warning(
         f"'{seccion_key}': ningún selector de contenido encontrado en {timeout_contenido}s. "
-        f"Esperando 5s adicionales y continuando.")
-    time.sleep(5)
+        f"Esperando 2s adicionales y continuando.")
+    time.sleep(2)
 
     # Log del HTML actual para diagnóstico
     try:
@@ -475,11 +475,11 @@ def revisar_agenda(driver, basal):
     Extrae eventos del calendario esperando el contenido dinámico (FullCalendar/SPA).
     """
     url = config.BASE_URL + SECCIONES['agenda']
-    if not _navegar_y_esperar(driver, url, 'agenda', timeout_contenido=20):
+    if not _navegar_y_esperar(driver, url, 'agenda', timeout_contenido=8):
         return [{'error': 'Seccion agenda no disponible'}]
 
     # Espera extra para que FullCalendar renderice todos los eventos
-    time.sleep(3)
+    time.sleep(1)
 
     soup        = _soup(driver)
     eventos_raw = []
