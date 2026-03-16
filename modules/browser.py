@@ -222,8 +222,6 @@ def _re_login(driver):
 
 def login(driver):
     """Login en WootIT con retry (3 intentos)."""
-    from selenium.common.exceptions import NoSuchElementException
-
     for intento in range(1, 4):
         try:
             logger.info(f"Login intento {intento}/3...")

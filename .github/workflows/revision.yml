@@ -2,8 +2,8 @@ name: ColegioCR - Revisión Diaria 6PM
 
 on:
   schedule:
-    - cron: '0 0 * * 1-5'   # 6:00 PM Costa Rica (UTC-6 = 00:00 UTC) — Lunes a Viernes
-  workflow_dispatch:          # Ejecución manual para pruebas
+    - cron: '0 0 * * 1-5'
+  workflow_dispatch:
 
 jobs:
   revision:
@@ -28,23 +28,15 @@ jobs:
       - name: Instalar dependencias del sistema
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q \
-            tesseract-ocr \
-            tesseract-ocr-spa \
-            poppler-utils || true
+          sudo apt-get install -y -q tesseract-ocr tesseract-ocr-spa poppler-utils || true
 
       - name: Instalar dependencias Python
-        run: pip install -r requirements.txt
-
-      - name: Crear directorios temporales
-        run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal
-
-      - name: Verificar instalación
         run: |
-          python -c "import selenium; print('selenium', selenium.__version__)"
-          python -c "import anthropic; print('anthropic', anthropic.__version__)"
-          python -c "import chromedriver_autoinstaller; chromedriver_autoinstaller.install(); print('chromedriver OK')"
-          google-chrome --version || chromium --version || echo "Chrome disponible via setup-chrome"
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Crear directorios
+        run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal /tmp/screenshots
 
       - name: Ejecutar revisión diaria
         env:
@@ -63,5 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: logs-${{ github.run_id }}
-          path: /tmp/logs/
+          path: |
+            /tmp/logs/
+            /tmp/screenshots/
           retention-days: 30
