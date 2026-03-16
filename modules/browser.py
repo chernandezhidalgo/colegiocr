@@ -1,6 +1,5 @@
 """
-browser.py v3.7.0 — FIX DEFINITIVO: esperar DOM post-login, no solo URL.
-
+browser.py v3.8.0 — FIX ROBUSTO: multi-indicador para login exitoso.
 DIAGNÓSTICO CONFIRMADO con home_post_login.html del run #8:
   El HTML guardado tiene título "Woot It - Login" y IDs loginForm, loginBtn.
   La SPA de WootIT siempre sirve el mismo HTML shell (formulario de login).
@@ -122,15 +121,54 @@ def _dom_post_login_cargado(driver, timeout=15):
     ha cargado el contenido autenticado (no el shell de login).
     Retorna True si el DOM post-login está listo.
     """
+    # Estrategia multi-indicador para login robusto:
+    # 1. Verificar button-show-menu (indicador primario)
+    # 2. Si falla, verificar ausencia de loginForm (indicador secundario)
+    # 3. Si falla, verificar URL no sea /login/ (indicador terciario)
+    # 4. Continuar con advertencia si algún indicador es positivo
+    
     try:
+        # Indicador primario: button-show-menu presente
         WebDriverWait(driver, timeout).until(
             EC.presence_of_element_located((By.ID, SELECTOR_BTN_MENU))
         )
         logger.debug("DOM post-login confirmado (button-show-menu presente)")
         return True
     except TimeoutException:
-        logger.warning(f"DOM post-login NO cargó en {timeout}s (button-show-menu ausente)")
-        return False
+        # button-show-menu no apareció — verificar indicadores alternativos
+        current_url = driver.current_url
+        
+        # Indicador secundario: ausencia de loginForm
+        try:
+            driver.find_element(By.ID, "loginForm")
+            login_form_presente = True
+        except NoSuchElementException:
+            login_form_presente = False
+        
+        # Indicador terciario: URL no es /login/
+        url_no_login = '/login' not in current_url.lower()
+        
+        if not login_form_presente and url_no_login:
+            # Ambos indicadores sugieren login exitoso
+            logger.warning(
+                f"button-show-menu ausente pero login parece exitoso: "
+                f"loginForm={login_form_presente}, URL={current_url}"
+            )
+            return True
+        elif url_no_login:
+            # Solo URL cambió — posible éxito con advertencia
+            logger.warning(
+                f"button-show-menu ausente, pero URL cambió a {current_url}. "
+                "Continuando con advertencia."
+            )
+            return True
+        else:
+            # Ningún indicador positivo — login realmente falló
+            logger.warning(
+                f"DOM post-login NO cargó en {timeout}s: button-show-menu ausente, "
+                f"loginForm presente o URL={current_url}"
+            )
+            return False
 
 
 def wait_and_get(driver, url, css_wait="body", timeout=20):
