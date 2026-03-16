@@ -27,11 +27,8 @@ import time
 from io import BytesIO
 
 import anthropic
-import chromedriver_autoinstaller
+import undetected_chromedriver as uc
 from PIL import Image
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -53,30 +50,33 @@ _EN_CI = os.environ.get("CI", "").lower() == "true"
 
 
 def get_driver(headless=True):
+    """
+    v3.9.0: undetected-chromedriver en lugar de selenium puro.
+    Parchea los fingerprints de ChromeDriver que WootIT usa para
+    detectar y bloquear bots. Drop-in replacement de webdriver.Chrome.
+    """
     if _EN_CI:
         headless = True
-    chromedriver_path = chromedriver_autoinstaller.install()
-    opts = Options()
-    if headless:
-        opts.add_argument("--headless=new")
+
+    opts = uc.ChromeOptions()
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
     opts.add_argument("--window-size=1920,1080")
-    opts.add_argument("--disable-blink-features=AutomationControlled")
     opts.add_argument("--disable-notifications")
-    opts.add_argument("--disable-extensions")
     opts.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
     )
-    if not headless:
-        opts.add_experimental_option("excludeSwitches", ["enable-automation"])
-        opts.add_experimental_option("useAutomationExtension", False)
-    service = Service(chromedriver_path) if chromedriver_path else Service()
-    driver  = webdriver.Chrome(service=service, options=opts)
+
+    driver = uc.Chrome(
+        options=opts,
+        headless=headless,
+        use_subprocess=True,   # más estable en CI
+        no_sandbox=True,
+    )
     driver.implicitly_wait(3)
-    logger.info(f"Chrome iniciado (headless={headless})")
+    logger.info(f"Chrome (undetected) iniciado (headless={headless})")
     return driver
 
 
