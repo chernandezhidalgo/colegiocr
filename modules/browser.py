@@ -1,19 +1,25 @@
 """
-browser.py v3.6.0 — Navegación por CLICK en menú lateral + análisis visual del home.
+browser.py v3.7.0 — FIX DEFINITIVO: esperar DOM post-login, no solo URL.
 
-ESTRATEGIA DEFINITIVA basada en los runs #1 al #7:
-  El portal WootIT redirige todas las URLs internas al login cuando
-  Selenium navega directamente (driver.get o window.location.href).
-  La sesión SÍ persiste en /home/ pero las rutas .cfm requieren
-  provenir de un click dentro de la SPA.
+DIAGNÓSTICO CONFIRMADO con home_post_login.html del run #8:
+  El HTML guardado tiene título "Woot It - Login" y IDs loginForm, loginBtn.
+  La SPA de WootIT siempre sirve el mismo HTML shell (formulario de login).
+  JavaScript reemplaza el DOM con el contenido real DESPUÉS de verificar
+  cookies de sesión. Selenium lograba la URL /home/ pero leía el DOM
+  del shell vacío antes de que JS lo reemplazara.
 
-  Nueva estrategia:
-  1. Login → llegar a /home/
-  2. Analizar /home/ con Claude Vision para capturar info del dashboard
-  3. Para cada sección: abrir menú lateral → click en el ítem
-  4. wait_and_get() como fallback para secciones que sí aceptan URL directa
-  5. _esta_en_login() simplificado: solo verifica URL, sin find_element
-     para evitar false positives en secciones que tardan en cargar
+  El mismo shell se carga para TODAS las rutas (.cfm incluidas).
+  JS luego decide qué mostrar según la sesión y la ruta.
+
+FIX:
+  1. Después del login, esperar explícitamente que button-show-menu
+     aparezca en el DOM (elemento que SOLO existe post-login).
+  2. Para navegación a secciones: navegar a la URL → esperar que
+     el DOM ya no sea el shell de login (button-show-menu presente).
+  3. Si button-show-menu no aparece en 15s → la SPA no autenticó
+     para esa ruta → tomar screenshot para Claude Vision de todos modos.
+  4. Para cambio de estudiante: usar el menú DESPUÉS de confirmar
+     que el DOM post-login está cargado.
 """
 import base64
 import logging
@@ -70,7 +76,7 @@ def get_driver(headless=True):
         opts.add_experimental_option("useAutomationExtension", False)
     service = Service(chromedriver_path) if chromedriver_path else Service()
     driver  = webdriver.Chrome(service=service, options=opts)
-    driver.implicitly_wait(5)
+    driver.implicitly_wait(3)
     logger.info(f"Chrome iniciado (headless={headless})")
     return driver
 
@@ -109,156 +115,56 @@ def analizar_pantalla_con_claude(driver, pregunta):
         return ""
 
 
-def _url_es_login(url):
-    """Verifica si una URL es la pantalla de login."""
-    return '/login/' in url or url.endswith('/login') or url == config.BASE_URL + '/'
-
-
-def _navegar_por_menu(driver, seccion_key):
+def _dom_post_login_cargado(driver, timeout=15):
     """
-    Navega a una sección usando el menú lateral del portal.
-    Estrategia: abrir menú → buscar link con href que contenga la sección → click.
-    Retorna True si la navegación fue exitosa.
+    Espera que el DOM post-login esté renderizado.
+    El elemento button-show-menu SOLO existe cuando la SPA
+    ha cargado el contenido autenticado (no el shell de login).
+    Retorna True si el DOM post-login está listo.
     """
-    # Selectores de links en el menú lateral de WootIT
-    href_keywords = {
-        'mensajes':       ['mensajes', 'comunicacion', 'message', 'inbox'],
-        'calificaciones': ['calificacion', 'nota', 'grade', 'calific'],
-        'asistencia':     ['asistencia', 'attendance', 'asistenciayconducta'],
-        'boleta':         ['boleta', 'conducta', 'comportamiento'],
-        'anotaciones':    ['anotacion', 'annotation', 'observacion'],
-        'aula_virtual':   ['aulavirtual', 'aula', 'virtual', 'lms', 'classroom'],
-        'agenda':         ['calendar', 'agenda', 'calendario', 'event'],
-    }
-    keywords = href_keywords.get(seccion_key, [seccion_key])
-
-    # Intentar navegar sin menú primero (algunos links están visibles directamente)
-    for kw in keywords:
-        try:
-            links = driver.find_elements(By.CSS_SELECTOR, f'a[href*="{kw}"]')
-            for link in links:
-                if link.is_displayed():
-                    href = link.get_attribute('href') or ''
-                    if href and 'login' not in href.lower():
-                        logger.info(f"Link directo encontrado para {seccion_key}: {href}")
-                        link.click()
-                        time.sleep(2)
-                        return True
-        except Exception:
-            pass
-
-    # Abrir menú lateral y buscar link
     try:
-        wait = WebDriverWait(driver, 5)
-        # Intentar abrir el menú
-        try:
-            btn = wait.until(EC.element_to_be_clickable((By.ID, SELECTOR_BTN_MENU)))
-            btn.click()
-            time.sleep(1)
-        except TimeoutException:
-            # El menú puede ya estar abierto o tener otro selector
-            for sel in ['.menu-toggle', '.hamburger', '.sidebar-toggle',
-                        '[class*="menu-btn"]', '[class*="toggle-menu"]']:
-                try:
-                    btn = driver.find_element(By.CSS_SELECTOR, sel)
-                    if btn.is_displayed():
-                        btn.click()
-                        time.sleep(2)
-                        break
-                except NoSuchElementException:
-                    pass
-
-        # Buscar el link en el menú abierto
-        for kw in keywords:
-            links = driver.find_elements(By.CSS_SELECTOR, f'a[href*="{kw}"]')
-            for link in links:
-                if link.is_displayed():
-                    href = link.get_attribute('href') or ''
-                    if href and 'login' not in href.lower():
-                        logger.info(f"Link en menú encontrado para {seccion_key}: {href}")
-                        link.click()
-                        time.sleep(2)
-                        return True
-    except Exception as e:
-        logger.warning(f"_navegar_por_menu({seccion_key}): {e}")
-
-    return False
+        WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.ID, SELECTOR_BTN_MENU))
+        )
+        logger.debug("DOM post-login confirmado (button-show-menu presente)")
+        return True
+    except TimeoutException:
+        logger.warning(f"DOM post-login NO cargó en {timeout}s (button-show-menu ausente)")
+        return False
 
 
 def wait_and_get(driver, url, css_wait="body", timeout=20):
     """
-    v3.6.0: Estrategia dual:
-    1. Intentar navegación por menú (mantiene sesión SPA)
-    2. Si falla o URL no está en menú: usar window.location.href
-    3. Si la URL resultante es login: reportar error sin re-login infinito
+    v3.7.0: Navega a la URL y espera que el DOM POST-LOGIN esté renderizado.
+    El DOM post-login se confirma por la presencia de button-show-menu.
     """
     try:
         base = config.BASE_URL
-
-        # Extraer la clave de sección de la URL para navegar por menú
-        seccion_key = None
-        url_lower = url.lower()
-        for key, path in {
-            'mensajes':       'mensajes',
-            'calificaciones': 'calificacion',
-            'asistencia':     'asistencia',
-            'boleta':         'boleta',
-            'anotaciones':    'anotacion',
-            'aula_virtual':   'aulavirtual',
-            'agenda':         'calendar',
-        }.items():
-            if path in url_lower:
-                seccion_key = key
-                break
-
-        # Estrategia 1: Click en menú lateral
-        if seccion_key:
-            exito = _navegar_por_menu(driver, seccion_key)
-            if exito:
-                url_actual = driver.current_url
-                if not _url_es_login(url_actual):
-                    logger.info(f"Navegación por menú exitosa: {url_actual}")
-                    time.sleep(2)
-                    return True
-                else:
-                    logger.warning(f"Menú navegó a login para {seccion_key}")
-
-        # Estrategia 2: window.location.href
         if url.startswith(base):
             path = url[len(base):]
         elif url.startswith('http'):
             driver.get(url)
-            time.sleep(3)
-            return not _url_es_login(driver.current_url)
+            time.sleep(2)
+            return True
         else:
             path = url
 
-        logger.debug(f"Navegando por JS a: {path}")
+        # Navegar via JS para mantener sesión SPA
+        logger.debug(f"Navegando a: {path}")
         driver.execute_script(f"window.location.href = '{base}{path}'")
-        time.sleep(4)
 
-        url_actual = driver.current_url
-        if _url_es_login(url_actual):
-            logger.warning(f"Redirigido a login al navegar a {path}")
-            # Un solo intento de re-login
-            if login(driver):
-                driver.execute_script(f"window.location.href = '{base}{path}'")
-                time.sleep(4)
-                if _url_es_login(driver.current_url):
-                    logger.error(f"Sigue en login tras re-login para {path}")
-                    return False
-            else:
-                return False
+        # Esperar DOM post-login (elemento que solo existe autenticado)
+        dom_ok = _dom_post_login_cargado(driver, timeout=12)
 
-        if css_wait != 'body':
-            try:
-                WebDriverWait(driver, timeout).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, css_wait))
-                )
-            except TimeoutException:
-                pass
+        if not dom_ok:
+            # DOM sigue siendo el shell de login — tomar screenshot de todos modos
+            # Claude Vision analizará lo que haya (puede ser login o contenido parcial)
+            logger.warning(f"DOM post-login no disponible para {path}. Continuando con screenshot.")
+            time.sleep(2)
+            return True   # Retornar True para que Claude Vision sea invocado
 
-        time.sleep(1.5)
+        # DOM post-login listo — esperar un poco más para renderizado completo
+        time.sleep(2)
         return True
 
     except Exception as e:
@@ -267,7 +173,10 @@ def wait_and_get(driver, url, css_wait="body", timeout=20):
 
 
 def login(driver):
-    """Login en WootIT — verifica éxito SOLO por URL."""
+    """
+    Login en WootIT.
+    v3.7.0: Espera button-show-menu en el DOM (no solo URL=/home/).
+    """
     for intento in range(1, 4):
         try:
             logger.info(f"Login intento {intento}/3...")
@@ -286,10 +195,10 @@ def login(driver):
             time.sleep(0.5)
             btn_login.click()
 
-            logger.info("Clic en login, esperando URL /home/...")
-            time.sleep(5)
+            logger.info("Clic en login. Esperando DOM post-login (button-show-menu)...")
 
             # Cerrar modales
+            time.sleep(3)
             try:
                 for cb in driver.find_elements(
                         By.CSS_SELECTOR, ".close, .btn-close, [data-dismiss='modal']"):
@@ -298,35 +207,31 @@ def login(driver):
             except Exception:
                 pass
 
-            # Esperar URL /home/ — único criterio confiable
-            try:
-                WebDriverWait(driver, 30).until(
-                    lambda d: "home" in d.current_url and "login" not in d.current_url
-                )
+            # CLAVE: esperar button-show-menu, no solo la URL
+            dom_ok = _dom_post_login_cargado(driver, timeout=30)
+
+            if dom_ok:
                 logger.info(f"Login exitoso. URL: {driver.current_url}")
 
-                # Guardar diagnósticos
+                # Guardar HTML DESPUÉS de que el DOM post-login esté listo
                 try:
                     os.makedirs("/tmp/screenshots", exist_ok=True)
                     driver.save_screenshot("/tmp/screenshots/home_post_login.png")
                     with open("/tmp/screenshots/home_post_login.html", "w",
                               encoding="utf-8") as f:
-                        # Guardar TODO el HTML para analizar selectores del menú
                         f.write(driver.page_source)
-                    logger.info("HTML completo del home guardado para análisis de menú")
+                    logger.info(f"HTML post-login guardado ({len(driver.page_source):,} chars)")
                 except Exception as ex:
                     logger.warning(f"No se pudo guardar diagnóstico: {ex}")
 
                 return True
-
-            except TimeoutException:
+            else:
+                logger.warning(f"Login intento {intento}: button-show-menu no apareció.")
                 try:
                     os.makedirs("/tmp/logs", exist_ok=True)
                     driver.save_screenshot(f"/tmp/logs/error_login_{intento}.png")
-                    logger.warning(
-                        f"Login timeout intento {intento}. URL: {driver.current_url}")
                 except Exception:
-                    logger.warning(f"Login timeout intento {intento}")
+                    pass
 
         except Exception as e:
             logger.warning(f"Error login intento {intento}: {e}")
@@ -336,7 +241,9 @@ def login(driver):
 
 
 def cambiar_estudiante(driver, nombre, grado_esperado):
-    """Cambia de perfil de estudiante usando el menú del portal."""
+    """
+    Cambia de perfil. v3.7.0: confirma DOM post-login antes de abrir menú.
+    """
     user_id = ESTUDIANTES_IDS.get(nombre)
     if not user_id:
         logger.error(f"ID no encontrado para: {nombre}")
@@ -348,45 +255,41 @@ def cambiar_estudiante(driver, nombre, grado_esperado):
         try:
             logger.info(f"cambiar_estudiante intento {intento}/3 → {nombre}")
 
-            # Volver a /home/ via JS
-            driver.execute_script(f"window.location.href = '{config.BASE_URL}/home/'")
-            wait = WebDriverWait(driver, 20)
-            wait.until(EC.presence_of_element_located((By.ID, SELECTOR_BTN_MENU)))
-            time.sleep(2)
+            # Navegar a home y esperar DOM post-login
+            driver.execute_script(
+                f"window.location.href = '{config.BASE_URL}/home/'")
+            dom_ok = _dom_post_login_cargado(driver, timeout=15)
 
-            # Verificar que no estamos en login
-            if _url_es_login(driver.current_url):
-                logger.warning("En login al intentar cambiar perfil. Re-login...")
+            if not dom_ok:
+                logger.warning(f"DOM post-login no disponible en home (intento {intento})")
                 if not login(driver):
                     return False
+                continue
 
-            # Abrir menú y click en avatar
-            btn = wait.until(EC.element_to_be_clickable((By.ID, SELECTOR_BTN_MENU)))
-            btn.click()
+            wait = WebDriverWait(driver, 10)
             time.sleep(1)
 
+            # Abrir menú
+            btn = wait.until(EC.element_to_be_clickable((By.ID, SELECTOR_BTN_MENU)))
+            btn.click()
+            time.sleep(1.5)
+
+            # Esperar submenú
             wait.until(EC.visibility_of_element_located((By.ID, SELECTOR_SUBMENU)))
+
+            # Click en avatar del estudiante
             avatar = wait.until(EC.element_to_be_clickable((By.ID, user_id)))
             avatar.click()
             logger.info(f"Clic en avatar {nombre} (ID={user_id})")
-            time.sleep(4)
+            time.sleep(3)
 
-            # Verificar
-            if _url_es_login(driver.current_url):
-                logger.warning(f"Login post-cambio intento {intento}")
-                if not login(driver):
-                    continue
-                continue
-
-            try:
-                if nombre_buscar in driver.find_element(By.TAG_NAME, 'body').text.lower():
-                    logger.info(f"Cambio a {nombre} verificado.")
-                    return True
-            except Exception:
-                pass
-
-            logger.info(f"Cambio a {nombre} aceptado. URL={driver.current_url}")
-            return True
+            # Verificar DOM post-login tras cambio
+            dom_ok2 = _dom_post_login_cargado(driver, timeout=10)
+            if dom_ok2:
+                logger.info(f"Cambio a {nombre} exitoso.")
+                return True
+            else:
+                logger.warning(f"DOM post-login no confirmado post-cambio (intento {intento})")
 
         except Exception as e:
             logger.warning(f"cambiar_estudiante intento {intento}: {e}")
