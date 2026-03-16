@@ -1,19 +1,19 @@
 """
-browser.py v3.5.0 — Fix bug _esta_en_login() false positive.
+browser.py v3.6.0 — Navegación por CLICK en menú lateral + análisis visual del home.
 
-BUG en v3.4.0:
-  _esta_en_login() buscaba strings como 'loginBtn', 'loginForm' en
-  driver.page_source. El bundle JavaScript de la SPA de WootIT incluye
-  SIEMPRE esos strings aunque estemos en /home/ autenticados.
-  Resultado: después del login exitoso (URL=/home/), _esta_en_login()
-  devolvía True → continue → 3 intentos agotados → "Login fallido".
+ESTRATEGIA DEFINITIVA basada en los runs #1 al #7:
+  El portal WootIT redirige todas las URLs internas al login cuando
+  Selenium navega directamente (driver.get o window.location.href).
+  La sesión SÍ persiste en /home/ pero las rutas .cfm requieren
+  provenir de un click dentro de la SPA.
 
-FIX:
-  _esta_en_login() ahora verifica si el ELEMENTO VISIBLE del login
-  está realmente presente usando find_elements() con display check,
-  NO buscando texto en page_source.
-  Adicionalmente: el login ya no llama _esta_en_login() después de
-  confirmar URL=/home/ — si la URL cambió a home, el login fue exitoso.
+  Nueva estrategia:
+  1. Login → llegar a /home/
+  2. Analizar /home/ con Claude Vision para capturar info del dashboard
+  3. Para cada sección: abrir menú lateral → click en el ítem
+  4. wait_and_get() como fallback para secciones que sí aceptan URL directa
+  5. _esta_en_login() simplificado: solo verifica URL, sin find_element
+     para evitar false positives en secciones que tardan en cargar
 """
 import base64
 import logging
@@ -36,8 +36,8 @@ import config
 
 logger = logging.getLogger(__name__)
 
-SELECTOR_BTN_MENU  = "button-show-menu"
-SELECTOR_SUBMENU   = "submenu-usuarios"
+SELECTOR_BTN_MENU = "button-show-menu"
+SELECTOR_SUBMENU  = "submenu-usuarios"
 
 ESTUDIANTES_IDS = {
     "Carlos Emiliano": "user213",
@@ -109,64 +109,143 @@ def analizar_pantalla_con_claude(driver, pregunta):
         return ""
 
 
-def _esta_en_login(driver):
+def _url_es_login(url):
+    """Verifica si una URL es la pantalla de login."""
+    return '/login/' in url or url.endswith('/login') or url == config.BASE_URL + '/'
+
+
+def _navegar_por_menu(driver, seccion_key):
     """
-    FIX v3.5.0: Detecta login verificando la URL, NO el page_source.
-    page_source siempre contiene strings como 'loginBtn' en el bundle JS.
-    La URL es el indicador confiable del estado actual de la SPA.
+    Navega a una sección usando el menú lateral del portal.
+    Estrategia: abrir menú → buscar link con href que contenga la sección → click.
+    Retorna True si la navegación fue exitosa.
     """
-    try:
-        url = driver.current_url
-        # Si la URL contiene /login/ claramente estamos en login
-        if '/login/' in url or url.endswith('/login'):
-            return True
-        # Si la URL es la raíz o el home, NO estamos en login
-        if '/home/' in url or url.endswith('/home'):
-            return False
-        # Para cualquier otra URL interna (/calificaciones/, etc.)
-        # verificar si el botón de login está VISIBLE en pantalla
+    # Selectores de links en el menú lateral de WootIT
+    href_keywords = {
+        'mensajes':       ['mensajes', 'comunicacion', 'message', 'inbox'],
+        'calificaciones': ['calificacion', 'nota', 'grade', 'calific'],
+        'asistencia':     ['asistencia', 'attendance', 'asistenciayconducta'],
+        'boleta':         ['boleta', 'conducta', 'comportamiento'],
+        'anotaciones':    ['anotacion', 'annotation', 'observacion'],
+        'aula_virtual':   ['aulavirtual', 'aula', 'virtual', 'lms', 'classroom'],
+        'agenda':         ['calendar', 'agenda', 'calendario', 'event'],
+    }
+    keywords = href_keywords.get(seccion_key, [seccion_key])
+
+    # Intentar navegar sin menú primero (algunos links están visibles directamente)
+    for kw in keywords:
         try:
-            btn = driver.find_element(By.ID, "loginBtn")
-            return btn.is_displayed()
-        except NoSuchElementException:
-            return False
-    except Exception:
-        return False
+            links = driver.find_elements(By.CSS_SELECTOR, f'a[href*="{kw}"]')
+            for link in links:
+                if link.is_displayed():
+                    href = link.get_attribute('href') or ''
+                    if href and 'login' not in href.lower():
+                        logger.info(f"Link directo encontrado para {seccion_key}: {href}")
+                        link.click()
+                        time.sleep(3)
+                        return True
+        except Exception:
+            pass
+
+    # Abrir menú lateral y buscar link
+    try:
+        wait = WebDriverWait(driver, 10)
+        # Intentar abrir el menú
+        try:
+            btn = wait.until(EC.element_to_be_clickable((By.ID, SELECTOR_BTN_MENU)))
+            btn.click()
+            time.sleep(2)
+        except TimeoutException:
+            # El menú puede ya estar abierto o tener otro selector
+            for sel in ['.menu-toggle', '.hamburger', '.sidebar-toggle',
+                        '[class*="menu-btn"]', '[class*="toggle-menu"]']:
+                try:
+                    btn = driver.find_element(By.CSS_SELECTOR, sel)
+                    if btn.is_displayed():
+                        btn.click()
+                        time.sleep(2)
+                        break
+                except NoSuchElementException:
+                    pass
+
+        # Buscar el link en el menú abierto
+        for kw in keywords:
+            links = driver.find_elements(By.CSS_SELECTOR, f'a[href*="{kw}"]')
+            for link in links:
+                if link.is_displayed():
+                    href = link.get_attribute('href') or ''
+                    if href and 'login' not in href.lower():
+                        logger.info(f"Link en menú encontrado para {seccion_key}: {href}")
+                        link.click()
+                        time.sleep(3)
+                        return True
+    except Exception as e:
+        logger.warning(f"_navegar_por_menu({seccion_key}): {e}")
+
+    return False
 
 
 def wait_and_get(driver, url, css_wait="body", timeout=20):
     """
-    Navega dentro de la SPA usando JavaScript location.href
-    para mantener la sesión activa.
+    v3.6.0: Estrategia dual:
+    1. Intentar navegación por menú (mantiene sesión SPA)
+    2. Si falla o URL no está en menú: usar window.location.href
+    3. Si la URL resultante es login: reportar error sin re-login infinito
     """
     try:
         base = config.BASE_URL
 
-        # Extraer path relativo
+        # Extraer la clave de sección de la URL para navegar por menú
+        seccion_key = None
+        url_lower = url.lower()
+        for key, path in {
+            'mensajes':       'mensajes',
+            'calificaciones': 'calificacion',
+            'asistencia':     'asistencia',
+            'boleta':         'boleta',
+            'anotaciones':    'anotacion',
+            'aula_virtual':   'aulavirtual',
+            'agenda':         'calendar',
+        }.items():
+            if path in url_lower:
+                seccion_key = key
+                break
+
+        # Estrategia 1: Click en menú lateral
+        if seccion_key:
+            exito = _navegar_por_menu(driver, seccion_key)
+            if exito:
+                url_actual = driver.current_url
+                if not _url_es_login(url_actual):
+                    logger.info(f"Navegación por menú exitosa: {url_actual}")
+                    time.sleep(2)
+                    return True
+                else:
+                    logger.warning(f"Menú navegó a login para {seccion_key}")
+
+        # Estrategia 2: window.location.href
         if url.startswith(base):
             path = url[len(base):]
         elif url.startswith('http'):
             driver.get(url)
-            WebDriverWait(driver, timeout).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, css_wait))
-            )
-            time.sleep(1.5)
-            return True
+            time.sleep(3)
+            return not _url_es_login(driver.current_url)
         else:
             path = url
 
-        logger.debug(f"Navegando SPA a: {path}")
+        logger.debug(f"Navegando por JS a: {path}")
         driver.execute_script(f"window.location.href = '{base}{path}'")
-        time.sleep(3)
+        time.sleep(4)
 
-        # Verificar redirección a login usando URL
-        if _esta_en_login(driver):
-            logger.warning(f"Redirigido al login al navegar a {path}. Re-login...")
-            if _re_login(driver):
+        url_actual = driver.current_url
+        if _url_es_login(url_actual):
+            logger.warning(f"Redirigido a login al navegar a {path}")
+            # Un solo intento de re-login
+            if login(driver):
                 driver.execute_script(f"window.location.href = '{base}{path}'")
-                time.sleep(3)
-                if _esta_en_login(driver):
-                    logger.error(f"Sigue en login tras re-login. Abortando {path}")
+                time.sleep(4)
+                if _url_es_login(driver.current_url):
+                    logger.error(f"Sigue en login tras re-login para {path}")
                     return False
             else:
                 return False
@@ -187,18 +266,8 @@ def wait_and_get(driver, url, css_wait="body", timeout=20):
         return False
 
 
-def _re_login(driver):
-    """Re-autentica si la sesión expiró."""
-    logger.info("Re-login por sesión expirada...")
-    return login(driver)
-
-
 def login(driver):
-    """
-    Login en WootIT con retry (3 intentos).
-    FIX v3.5.0: No llama _esta_en_login() tras confirmar URL=/home/
-    para evitar false positives por bundle JS de la SPA.
-    """
+    """Login en WootIT — verifica éxito SOLO por URL."""
     for intento in range(1, 4):
         try:
             logger.info(f"Login intento {intento}/3...")
@@ -217,51 +286,47 @@ def login(driver):
             time.sleep(0.5)
             btn_login.click()
 
-            logger.info("Clic en login, esperando redirección a /home/...")
+            logger.info("Clic en login, esperando URL /home/...")
             time.sleep(5)
 
-            # Cerrar modales si aparecen
+            # Cerrar modales
             try:
                 for cb in driver.find_elements(
                         By.CSS_SELECTOR, ".close, .btn-close, [data-dismiss='modal']"):
                     if cb.is_displayed():
-                        cb.click()
-                        time.sleep(1)
+                        cb.click(); time.sleep(1)
             except Exception:
                 pass
 
-            # Esperar que la URL cambie a /home/ — indicador confiable de login exitoso
+            # Esperar URL /home/ — único criterio confiable
             try:
                 WebDriverWait(driver, 30).until(
                     lambda d: "home" in d.current_url and "login" not in d.current_url
                 )
                 logger.info(f"Login exitoso. URL: {driver.current_url}")
 
-                # Guardar screenshot y HTML del home para diagnóstico
+                # Guardar diagnósticos
                 try:
                     os.makedirs("/tmp/screenshots", exist_ok=True)
                     driver.save_screenshot("/tmp/screenshots/home_post_login.png")
                     with open("/tmp/screenshots/home_post_login.html", "w",
                               encoding="utf-8") as f:
-                        f.write(driver.page_source[:80000])
-                    logger.info("Screenshot y HTML del home guardados en /tmp/screenshots/")
+                        # Guardar TODO el HTML para analizar selectores del menú
+                        f.write(driver.page_source)
+                    logger.info("HTML completo del home guardado para análisis de menú")
                 except Exception as ex:
-                    logger.warning(f"No se pudo guardar screenshot: {ex}")
+                    logger.warning(f"No se pudo guardar diagnóstico: {ex}")
 
                 return True
 
             except TimeoutException:
-                # Login no confirmado — guardar screenshot de diagnóstico
                 try:
                     os.makedirs("/tmp/logs", exist_ok=True)
                     driver.save_screenshot(f"/tmp/logs/error_login_{intento}.png")
                     logger.warning(
-                        f"Login timeout intento {intento}. "
-                        f"URL actual: {driver.current_url}. "
-                        f"Screenshot guardado."
-                    )
+                        f"Login timeout intento {intento}. URL: {driver.current_url}")
                 except Exception:
-                    logger.warning(f"Login timeout intento {intento}.")
+                    logger.warning(f"Login timeout intento {intento}")
 
         except Exception as e:
             logger.warning(f"Error login intento {intento}: {e}")
@@ -283,48 +348,48 @@ def cambiar_estudiante(driver, nombre, grado_esperado):
         try:
             logger.info(f"cambiar_estudiante intento {intento}/3 → {nombre}")
 
-            # Navegar a home via JS para mantener sesión
+            # Volver a /home/ via JS
             driver.execute_script(f"window.location.href = '{config.BASE_URL}/home/'")
             wait = WebDriverWait(driver, 20)
             wait.until(EC.presence_of_element_located((By.ID, SELECTOR_BTN_MENU)))
             time.sleep(2)
 
-            if _esta_en_login(driver):
+            # Verificar que no estamos en login
+            if _url_es_login(driver.current_url):
                 logger.warning("En login al intentar cambiar perfil. Re-login...")
-                if not _re_login(driver):
+                if not login(driver):
                     return False
 
+            # Abrir menú y click en avatar
             btn = wait.until(EC.element_to_be_clickable((By.ID, SELECTOR_BTN_MENU)))
             btn.click()
             time.sleep(2)
 
             wait.until(EC.visibility_of_element_located((By.ID, SELECTOR_SUBMENU)))
-
             avatar = wait.until(EC.element_to_be_clickable((By.ID, user_id)))
             avatar.click()
             logger.info(f"Clic en avatar {nombre} (ID={user_id})")
             time.sleep(4)
 
-            if _esta_en_login(driver):
-                logger.warning(f"Redirigido al login tras cambio (intento {intento})")
-                if not _re_login(driver):
+            # Verificar
+            if _url_es_login(driver.current_url):
+                logger.warning(f"Login post-cambio intento {intento}")
+                if not login(driver):
                     continue
                 continue
 
-            # Verificar nombre en la página
             try:
-                page_text = driver.find_element(By.TAG_NAME, 'body').text.lower()
-                if nombre_buscar in page_text:
+                if nombre_buscar in driver.find_element(By.TAG_NAME, 'body').text.lower():
                     logger.info(f"Cambio a {nombre} verificado.")
                     return True
             except Exception:
                 pass
 
-            logger.info(f"Cambio a {nombre}: aceptado (URL={driver.current_url}).")
+            logger.info(f"Cambio a {nombre} aceptado. URL={driver.current_url}")
             return True
 
         except Exception as e:
-            logger.warning(f"cambiar_estudiante intento {intento} excepción: {e}")
+            logger.warning(f"cambiar_estudiante intento {intento}: {e}")
             time.sleep(2)
 
     logger.warning(f"Aceptando {nombre} tras 3 intentos.")
