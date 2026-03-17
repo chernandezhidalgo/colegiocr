@@ -1,31 +1,14 @@
 """
-api_client.py v2.0.0 — Cliente HTTP WootIT con cookies de sesión inyectadas.
+api_client.py v3.0.0 — Cliente HTTP WootIT con cookies + diagnóstico completo.
 
-DIAGNÓSTICO DEFINITIVO:
-  WootIT bloquea el POST de login desde IPs de datacenter (Azure/GitHub Actions).
-  El servidor devuelve HTTP 200 pero no redirige a /home/ — rechaza credenciales
-  cuando detecta que la IP no es residencial.
-
-SOLUCIÓN:
-  Inyectar las cookies de una sesión real (obtenidas del navegador del usuario)
-  como GitHub Secret WOOTIT_COOKIES. El cliente las carga directamente sin
-  necesidad de hacer login.
-
-  Las cookies críticas de WootIT son de larga duración (expiran 2026-2027),
-  por lo que esta solución es estable. Cuando expiren, se renuevan copiando
-  las cookies del navegador nuevamente.
-
-FORMATO DEL SECRET WOOTIT_COOKIES:
-  String en formato HTTP Cookie header, separado por "; "
-  Ejemplo:
-  cfid=abc123; cftoken=0; QUSUARIO=480; WOOTAUTOLOG=1; WOOTA=xxx; ...
-
-ARQUITECTURA:
-  Stack: Lucee 6.2.3.35 (ColdFusion OSS) sobre Undertow/Java
-  Auth: Cookie de sesión — cfid + cftoken + WOOTA/WOOTP/WOOTU + WOOTITAPITOKEN
-  API JSON: ColdFusion Components (.cfc?method=X&returnformat=json)
-  Formato: Lucee QueryBean {COLUMNS:[...], DATA:[[...],...]}
+v3.0.0 cambios:
+  - Diagnóstico HTML de calificaciones/asistencia/mensajes para ver estructura real
+  - Cambio de estudiante mejorado: prueba múltiples endpoints CFC
+  - Agrega userId a todos los requests que lo soporten
+  - Log de WOOTITAPITOKEN para verificar qué estudiante tiene la sesión
 """
+import base64
+import json
 import logging
 import os
 import time
@@ -54,10 +37,6 @@ ESTUDIANTES_NUM = {
 
 
 def _parsear_cookie_string(cookie_str: str) -> dict:
-    """
-    Convierte un string de cookies HTTP en dict.
-    Formato entrada: "cfid=abc; cftoken=0; WOOTA=xxx"
-    """
     cookies = {}
     for part in cookie_str.split(";"):
         part = part.strip()
@@ -67,11 +46,21 @@ def _parsear_cookie_string(cookie_str: str) -> dict:
     return cookies
 
 
+def _decodificar_jwt(token: str) -> dict:
+    """Decodifica payload de JWT sin verificar firma."""
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return {}
+        payload = parts[1]
+        # Agregar padding si falta
+        payload += "=" * (4 - len(payload) % 4)
+        return json.loads(base64.b64decode(payload).decode("utf-8"))
+    except Exception:
+        return {}
+
+
 class WootITClient:
-    """
-    Cliente de sesión HTTP para WootIT.
-    Carga cookies desde el secret WOOTIT_COOKIES en lugar de hacer login.
-    """
 
     def __init__(self):
         self.session = requests.Session()
@@ -84,7 +73,6 @@ class WootITClient:
             "Accept":            "*/*",
             "Accept-Language":   "es-CR,es-ES;q=0.9,es;q=0.8",
             "Accept-Encoding":   "gzip, deflate, br, zstd",
-            "Content-Type":      "application/x-www-form-urlencoded; charset=UTF-8",
             "X-Requested-With":  "XMLHttpRequest",
             "Origin":            "https://www.wootit.com",
             "Referer":           f"{BASE}/home/",
@@ -93,94 +81,110 @@ class WootITClient:
             "Sec-Fetch-Site":    "same-origin",
         })
         self._estudiante_activo = None
-
-    # ── Autenticación via cookies ─────────────────────────────────────────────
+        self._user_id_activo = None
+        self._cookies_dict = {}
 
     def login(self) -> bool:
-        """
-        Carga cookies de sesión desde el secret WOOTIT_COOKIES.
-        No hace POST de credenciales — inyecta la sesión directamente.
-        """
         cookie_str = os.environ.get("WOOTIT_COOKIES", "").strip()
-
         if not cookie_str:
-            logger.error(
-                "❌ Secret WOOTIT_COOKIES no configurado. "
-                "Exporta las cookies de tu navegador y agrégalas como secret."
-            )
+            logger.error("❌ Secret WOOTIT_COOKIES no configurado.")
             return False
 
-        # Cargar cookies en la sesión
-        cookies_dict = _parsear_cookie_string(cookie_str)
-        for name, value in cookies_dict.items():
+        self._cookies_dict = _parsear_cookie_string(cookie_str)
+        for name, value in self._cookies_dict.items():
             self.session.cookies.set(name, value, domain="www.wootit.com")
 
-        logger.info(f"🍪 Cookies cargadas: {list(cookies_dict.keys())}")
+        logger.info(f"🍪 Cookies cargadas: {list(self._cookies_dict.keys())}")
 
-        # Verificar que la sesión es válida llamando al home
+        # Decodificar JWT para ver qué usuario/estudiante tiene la sesión
+        jwt = self._cookies_dict.get("WOOTITAPITOKEN", "")
+        if jwt:
+            payload = _decodificar_jwt(jwt)
+            logger.info(f"🔑 JWT payload: {payload}")
+
+        # QUSUARIO = ID del padre/tutor en sesión
+        qusuario = self._cookies_dict.get("QUSUARIO", "")
+        logger.info(f"👤 QUSUARIO (tutor): {qusuario}")
+
         try:
-            resp = self.session.get(f"{BASE}/home/", timeout=20, allow_redirects=True)
-            if "/login" in resp.url:
-                logger.error(
-                    f"❌ Sesión inválida — redirigido a login. "
-                    "Las cookies pueden haber expirado. Actualiza WOOTIT_COOKIES."
-                )
-                return False
-
-            # Verificar con CFC que retorna datos reales
             r = self.cfc_get("home/cfc/home.cfc", "getNext")
             if r:
-                logger.info("✅ Sesión WootIT válida — datos del home obtenidos")
+                logger.info("✅ Sesión WootIT válida")
+                # Log estructura completa de getNext para diagnóstico
+                for k, v in r.items():
+                    if isinstance(v, dict) and "COLUMNS" in v:
+                        rows = v.get("DATA", [])
+                        logger.info(f"   getNext.{k}: cols={v['COLUMNS']}, rows={len(rows)}")
+                        if rows:
+                            logger.info(f"   Primera fila: {dict(zip(v['COLUMNS'], rows[0]))}")
                 return True
             else:
-                logger.warning("⚠️  home.cfc/getNext devolvió vacío — sesión puede ser parcial")
-                return True  # Continuar de todas formas
-
+                logger.warning("⚠️  getNext devolvió vacío")
+                return True
         except Exception as e:
             logger.error(f"Error verificando sesión: {e}")
             return False
 
-    # ── Cambio de estudiante ──────────────────────────────────────────────────
-
     def cambiar_estudiante(self, nombre: str) -> bool:
-        """
-        Cambia el perfil activo al estudiante indicado.
-        WootIT usa el endpoint home.cfc con el ID del estudiante.
-        """
         user_num = ESTUDIANTES_NUM.get(nombre)
         if not user_num:
-            logger.error(f"ID numérico no encontrado para: {nombre}")
+            logger.error(f"ID no encontrado para: {nombre}")
             return False
 
-        try:
-            # Intentar cambio via CFC
-            r = self.cfc_get("home/cfc/home.cfc", "cambiarEstudiante",
-                             {"idUsuario": user_num})
-            logger.info(f"cambiarEstudiante({nombre}): {r}")
-        except Exception:
-            pass
+        self._user_id_activo = user_num
+        self._estudiante_activo = nombre
 
-        # Intentar via GET al home con parámetro
+        # Estrategia 1: getOpcionesEspeciales con userId
+        for method in ["getOpcionesEspeciales", "setEstudiante", "cambiarEstudiante",
+                        "selectEstudiante", "getEstudiante"]:
+            try:
+                r = self.cfc_get("home/cfc/home.cfc", method,
+                                 {"userRole": "padres", "idUsuario": user_num,
+                                  "userId": user_num})
+                logger.info(f"home.cfc/{method}(userId={user_num}): {str(r)[:150]}")
+                break
+            except Exception as e:
+                logger.debug(f"  {method}: {e}")
+
+        # Estrategia 2: POST al home con userId (como hace el JS del portal)
+        try:
+            resp = self.session.post(
+                f"{BASE}/home/cfc/home.cfc",
+                data={"method": "getNext", "returnformat": "json",
+                      "idUsuario": user_num, "userId": user_num},
+                timeout=15,
+            )
+            data = resp.json()
+            logger.info(f"POST home.cfc/getNext(userId={user_num}): keys={list(data.keys())}")
+            for k, v in data.items():
+                if isinstance(v, dict) and "COLUMNS" in v:
+                    rows = v.get("DATA", [])
+                    logger.info(f"   {k}: {len(rows)} filas")
+                    if rows:
+                        logger.info(f"   Primera fila: {dict(zip(v['COLUMNS'], rows[0]))}")
+        except Exception as e:
+            logger.warning(f"POST getNext userId: {e}")
+
+        # Estrategia 3: navegación al home con parámetro
         try:
             resp = self.session.get(
                 f"{BASE}/home/",
-                params={"idUsuario": user_num},
+                params={"idUsuario": user_num, "userId": user_num},
                 timeout=15,
             )
-            logger.info(f"GET home/?idUsuario={user_num}: {resp.status_code}")
+            logger.info(f"GET home/?userId={user_num}: {resp.status_code} | url={resp.url}")
         except Exception as e:
-            logger.warning(f"cambiar_estudiante GET: {e}")
+            logger.warning(f"GET home userId: {e}")
 
-        self._estudiante_activo = nombre
-        logger.info(f"Estudiante activo establecido: {nombre}")
+        logger.info(f"Estudiante activo: {nombre} (ID={user_num})")
         return True
 
-    # ── Llamadas base ─────────────────────────────────────────────────────────
-
     def cfc_get(self, cfc_path: str, method: str, params: dict = None) -> dict:
-        """Llama un endpoint CFC GET y retorna JSON."""
         url = f"{BASE}/{cfc_path}"
         p = {"method": method, "returnformat": "json"}
+        if self._user_id_activo:
+            p["idUsuario"] = self._user_id_activo
+            p["userId"]    = self._user_id_activo
         if params:
             p.update(params)
         resp = self.session.get(url, params=p, timeout=20)
@@ -188,9 +192,11 @@ class WootITClient:
         return resp.json()
 
     def cfc_post(self, cfc_path: str, method: str, data: dict = None) -> dict:
-        """Llama un endpoint CFC POST y retorna JSON."""
         url = f"{BASE}/{cfc_path}"
         d = {"method": method, "returnformat": "json"}
+        if self._user_id_activo:
+            d["idUsuario"] = self._user_id_activo
+            d["userId"]    = self._user_id_activo
         if data:
             d.update(data)
         resp = self.session.post(url, data=d, timeout=20)
@@ -198,17 +204,31 @@ class WootITClient:
         return resp.json()
 
     def html_get(self, path: str, params: dict = None) -> BeautifulSoup:
-        """GET de página HTML, retorna BeautifulSoup."""
         url = f"{BASE}/{path}"
-        resp = self.session.get(url, params=params, timeout=20)
+        p = params or {}
+        if self._user_id_activo:
+            p = {**p, "idUsuario": self._user_id_activo}
+        resp = self.session.get(url, params=p if p else None, timeout=20)
         resp.raise_for_status()
-        return BeautifulSoup(resp.text, "lxml")
+        html = resp.text
 
-    # ── Formato Lucee QueryBean ───────────────────────────────────────────────
+        # Diagnóstico: loguear estructura del HTML para entender qué devuelve
+        soup = BeautifulSoup(html, "lxml")
+        title = soup.title.string if soup.title else "sin-título"
+        tables = soup.find_all("table")
+        all_classes = set()
+        for tag in soup.find_all(True, limit=150):
+            for c in tag.get("class", []):
+                all_classes.add(c)
+        logger.info(f"HTML {path}: title='{title}' | tablas={len(tables)} | "
+                    f"clases={sorted(all_classes)[:15]}")
+        if tables:
+            logger.info(f"  Tabla[0] preview: {str(tables[0])[:300]}")
+
+        return soup
 
     @staticmethod
     def query_to_dicts(data, key: str = None) -> list:
-        """Convierte Lucee QueryBean a lista de dicts."""
         if key:
             data = data.get(key, {}) if isinstance(data, dict) else {}
         if not isinstance(data, dict):
