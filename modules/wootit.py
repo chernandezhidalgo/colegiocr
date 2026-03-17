@@ -276,76 +276,69 @@ def _procesar_calificaciones_json(rows: list, basal_notas: dict) -> list:
 
 
 def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> list:
+    """
+    ESTRUCTURA CONFIRMADA via DevTools (imagen 3):
+    Las notas están en aria-valuenow de .progress-bar dentro de .progress.
+    Ejemplo: progress-bar | 100.00 | aria-valuenow=100
+             progress-bar | 60.00  | aria-valuenow=60
+             progress-bar | 75.83  | aria-valuenow=75.83
+
+    Estructura HTML probable:
+    <div class="...">
+      <span>Nombre Materia</span>
+      <div class="progress">
+        <div class="progress-bar" aria-valuenow="75.83">75.83</div>
+      </div>
+    </div>
+    """
     notas = []
 
-    # Estrategia 1: buscar elementos con data-nota o data-calificacion
-    for el in soup.select("[data-nota], [data-calificacion], [data-grade]"):
-        materia = el.get_text(strip=True)
-        nota = (el.get("data-nota") or el.get("data-calificacion")
-                or el.get("data-grade") or "")
-        if materia and nota:
-            _agregar_nota(notas, materia, str(nota), basal_notas)
+    # Estrategia principal: progress-bar con aria-valuenow (CONFIRMADO)
+    for barra in soup.select(".progress-bar"):
+        nota = barra.get("aria-valuenow") or barra.get_text(strip=True)
+        if not nota:
+            continue
+        try:
+            float(nota)  # verificar que es número válido
+        except (ValueError, TypeError):
+            continue
 
-    # Estrategia 2: barras de progreso con style width o aria-valuenow
-    if not notas:
-        for barra in soup.select(".progress-bar, [role='progressbar']"):
-            nota = (barra.get("aria-valuenow") or
-                    barra.get("data-value") or "")
-            if nota:
-                # Buscar nombre de materia en elemento padre
-                padre = barra.parent
-                for _ in range(4):
-                    if padre:
-                        txt = padre.get_text(strip=True)
-                        if txt and len(txt) > 3:
-                            _agregar_nota(notas, txt[:50], str(nota), basal_notas)
+        # Buscar nombre de materia subiendo en el DOM
+        nombre = ""
+        el = barra.parent  # .progress
+        for _ in range(6):
+            if el is None:
+                break
+            # Buscar texto directo (no de hijos con progress-bar)
+            for child in el.children:
+                if hasattr(child, 'get_text'):
+                    # Excluir si contiene progress-bar
+                    if not child.select(".progress-bar") if hasattr(child, 'select') else True:
+                        txt = child.get_text(strip=True)
+                        if txt and len(txt) > 2 and not re.match(r'^[0-9.]+$', txt):
+                            nombre = txt[:80]
                             break
-                        padre = padre.parent
+                elif hasattr(child, 'strip') and child.strip():
+                    txt = child.strip()
+                    if len(txt) > 2 and not re.match(r'^[0-9.]+$', txt):
+                        nombre = txt[:80]
+                        break
+            if nombre:
+                break
+            el = el.parent
 
-    # Estrategia 3: selectores específicos de WootIT v3
-    if not notas:
-        for selector in [
-            ".calificaciones .materia", ".nota-container",
-            ".grade-item", ".course-grade", ".materia-nota",
-            "li.materia", ".cal-row", ".subject-row",
-            "[class*='materia']", "[class*='grade']", "[class*='nota']",
-        ]:
-            items = soup.select(selector)
-            if items:
-                logger.info(f"Calificaciones selector '{selector}': {len(items)} items")
-                for item in items:
-                    txt = item.get_text(separator="|", strip=True)
-                    parts = [p for p in txt.split("|") if p.strip()]
-                    if len(parts) >= 2:
-                        _agregar_nota(notas, parts[0], parts[1], basal_notas)
-                if notas:
-                    break
+        if nombre and nota:
+            _agregar_nota(notas, nombre, str(nota), basal_notas)
 
-    # Estrategia 4: tablas
+    # Fallback: tablas
     if not notas:
         for fila in soup.select("table tr")[1:]:
             celdas = fila.select("td")
             if len(celdas) >= 2:
                 materia = celdas[0].get_text(strip=True)
                 nota    = celdas[1].get_text(strip=True)
-                if materia and nota and len(materia) > 1 and len(nota) < 20:
+                if materia and nota and len(materia) > 1:
                     _agregar_nota(notas, materia, nota, basal_notas)
-
-    # Estrategia 5: cualquier elemento con texto numérico junto a nombre de materia
-    if not notas:
-        for el in soup.select(".calificaciones *"):
-            txt = el.get_text(strip=True)
-            if re.match(r'^[0-9]{2,3}(\.\d+)?$', txt):  # número tipo nota
-                # Buscar nombre en elemento hermano o padre
-                parent = el.parent
-                if parent:
-                    sibling_text = " ".join(
-                        s.get_text(strip=True)
-                        for s in parent.children
-                        if hasattr(s, 'get_text') and s != el
-                    )
-                    if sibling_text and len(sibling_text) > 2:
-                        _agregar_nota(notas, sibling_text[:60], txt, basal_notas)
 
     logger.info(f"Calificaciones HTML: {len(notas)} materias")
     return notas
