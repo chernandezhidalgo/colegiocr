@@ -46,7 +46,7 @@ ESTUDIANTES_NUM = {
 # QUSUARIO = ID real de sesión (cambia al seleccionar hijo)
 # 534 confirmado para Starling vía DevTools Application → Cookies
 ESTUDIANTES_QUSUARIO = {
-    "Carlos Emiliano": None,  # Por confirmar — activar Carlos y ver QUSUARIO
+    "Carlos Emiliano": 480,   # Confirmado: QUSUARIO=480 cuando Carlos está activo
     "Starling Andrés":  534,
 }
 

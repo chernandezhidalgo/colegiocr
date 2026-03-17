@@ -16,7 +16,7 @@ HIJO1_LABEL  = "Carlos Emiliano Hernández"
 HIJO1_NOMBRE = "Emiliano"
 HIJO1_GRADO  = "Sétimo"
 HIJO1_ID     = "user213"
-HIJO1_QUSUARIO = ""   # Por confirmar — activar Carlos y ver QUSUARIO
+HIJO1_QUSUARIO = "480"   # Confirmado: QUSUARIO=480 cuando Carlos está activo
 
 HIJO2_LABEL  = "Starling Andrés Hernández"
 HIJO2_NOMBRE = "Andrés"
