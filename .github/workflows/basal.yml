@@ -3,10 +3,6 @@ name: ColegioCR - Levantamiento Basal
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  secrets: write
-
 jobs:
   basal:
     runs-on: ubuntu-latest
