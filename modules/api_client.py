@@ -261,8 +261,10 @@ class WootITClient:
 
     def get_calificaciones_json(self) -> dict:
         """
-        Calificaciones via CFC con JWT Authorization header.
-        Prueba múltiples rutas y métodos.
+        Calificaciones via CFC.
+        DESCUBIERTO: estudianteDetalles.cfm?idCurso=739&idEst=240
+        → parámetro clave es idEst (no userId/idUsuario)
+        → idCurso identifica el curso específico
         """
         user = self._user_id_activo or 213
         paths = [
@@ -273,29 +275,34 @@ class WootITClient:
         ]
         methods = ["getCalificaciones", "getNotas", "getEstudiante",
                    "getAll", "get", "getCalificacionesEstudiante",
-                   "getNota", "getResumen", "getCalificacion"]
+                   "getNota", "getResumen", "getCalificacion",
+                   "getDetalles", "getByEstudiante"]
+        # Parámetros con los nombres correctos descubiertos en URL
+        param_sets = [
+            {"idEst": user, "returnformat": "json"},
+            {"idEst": user, "userId": user, "returnformat": "json"},
+            {"idUsuario": user, "idEst": user, "returnformat": "json"},
+            {"userId": user, "returnformat": "json"},
+        ]
         for path in paths:
             for method in methods:
-                try:
-                    r = self.session.get(
-                        f"{BASE}/{path}",
-                        params={"method": method, "returnformat": "json",
-                                "userId": user, "idUsuario": user},
-                        timeout=10,
-                    )
-                    if r.status_code == 200:
-                        text = r.text.strip()
-                        if "COLUMNS" in text[:200]:
-                            data = r.json()
-                            rows = data.get("DATA", [])
-                            if rows:
-                                logger.info(f"✅ CALIFICACIONES {path}/{method}: "
-                                            f"{len(rows)} filas | cols={data.get('COLUMNS',[])[:6]}")
-                                return data
-                        elif text and text != "null" and "{}" not in text[:10]:
-                            logger.info(f"   cal {path}/{method}: {text[:100]}")
-                except Exception:
-                    pass
+                for params in param_sets:
+                    try:
+                        p = {"method": method, **params}
+                        r = self.session.get(f"{BASE}/{path}", params=p, timeout=10)
+                        if r.status_code == 200:
+                            text = r.text.strip()
+                            if "COLUMNS" in text[:200]:
+                                data = r.json()
+                                rows = data.get("DATA", [])
+                                if rows:
+                                    logger.info(f"✅ CALIFICACIONES {path}/{method}: "
+                                                f"{len(rows)} filas | cols={data.get('COLUMNS',[])[:6]}")
+                                    return data
+                            elif text and text not in ("null","","{}","[]"):
+                                logger.info(f"   cal {path}/{method}/{list(params.keys())}: {text[:80]}")
+                    except Exception:
+                        pass
         logger.warning("calificaciones CFC: ningún endpoint respondió con datos")
         return {}
 
@@ -314,13 +321,18 @@ class WootITClient:
         methods = ["getAsistencia", "getResumen", "getAll",
                    "getAsistenciaEstudiante", "get", "getDetalle",
                    "getAsistenciaAlumno", "getPorcentaje"]
+        param_sets = [
+            {"idEst": user, "returnformat": "json"},
+            {"idEst": user, "userId": user, "returnformat": "json"},
+            {"userId": user, "returnformat": "json"},
+        ]
         for path in paths:
             for method in methods:
+              for params in param_sets:
                 try:
+                    p = {"method": method, **params}
                     r = self.session.get(
-                        f"{BASE}/{path}",
-                        params={"method": method, "returnformat": "json",
-                                "userId": user, "idUsuario": user},
+                        f"{BASE}/{path}", params=p,
                         timeout=10,
                     )
                     if r.status_code == 200:
@@ -332,8 +344,8 @@ class WootITClient:
                                 logger.info(f"✅ ASISTENCIA {path}/{method}: "
                                             f"{len(rows)} filas | cols={data.get('COLUMNS',[])[:6]}")
                                 return data
-                        elif text and text != "null" and "{}" not in text[:10]:
-                            logger.info(f"   asis {path}/{method}: {text[:100]}")
+                        elif text and text not in ("null","","{}","[]"):
+                            logger.info(f"   asis {path}/{method}: {text[:80]}")
                 except Exception:
                     pass
         logger.warning("asistencia CFC: ningún endpoint respondió con datos")
