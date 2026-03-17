@@ -469,13 +469,13 @@ def main():
                 'grado':        config.HIJO2_GRADO,
             }
             datos2['mensajes']       = _enriquecer_mensajes(revisar_mensajes(driver, ventana_desde, basal_vacio))
-                datos2['calificaciones'] = revisar_calificaciones(driver, basal_vacio)
-                datos2['asistencia']     = revisar_asistencia(driver, basal_vacio)
-                datos2['boleta']         = revisar_seccion_simple(driver, 'boleta',      basal_vacio, 'Lista todos los registros de conducta.')
-            datos2['anotaciones']    = revisar_seccion_simple(driver, 'anotaciones',  basal_vacio, 'Lista todas las anotaciones.')
+            datos2['calificaciones'] = revisar_calificaciones(driver, basal_vacio)
+            datos2['asistencia']     = revisar_asistencia(driver, basal_vacio)
+            datos2['boleta']         = revisar_seccion_simple(driver, 'boleta',      basal_vacio, 'Lista todos los registros de conducta.')
+            datos2['anotaciones']    = revisar_seccion_simple(driver, 'anotaciones', basal_vacio, 'Lista todas las anotaciones.')
             datos2['aula_virtual']   = revisar_aula_virtual(driver, ventana_desde, basal_vacio)
-                datos2['agenda']         = revisar_agenda(driver, basal_vacio)
-                datos_estudiantes.append(datos2)
+            datos2['agenda']         = revisar_agenda(driver, basal_vacio)
+            datos_estudiantes.append(datos2)
 
             guardar_basal('andres', {
                 'calificaciones': {c['materia']: c['nota'] for c in datos2['calificaciones']
