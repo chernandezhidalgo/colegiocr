@@ -130,6 +130,11 @@ class WootITClient:
         qusuario = self._cookies_dict.get("QUSUARIO", "")
         logger.info(f"👤 QUSUARIO (tutor): {qusuario}")
 
+        # Establecer Carlos Emiliano como estudiante activo por defecto
+        self._user_id_activo  = ESTUDIANTES_NUM.get("Carlos Emiliano", 213)
+        self._qusuario_activo = str(ESTUDIANTES_QUSUARIO.get("Carlos Emiliano", 480))
+        self._estudiante_activo = "Carlos Emiliano"
+
         try:
             r = self.cfc_get("home/cfc/home.cfc", "getNext")
             if r:

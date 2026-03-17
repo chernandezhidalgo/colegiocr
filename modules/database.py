@@ -60,13 +60,15 @@ def guardar_calificacion(estudiante: str, cal: dict):
         except (ValueError, TypeError):
             variacion = None
 
+        from datetime import datetime, timezone
+        fecha_reg = cal.get("fecha") or None  # None si vacío, no string vacío
         get_client().table("calificaciones").insert({
             "estudiante":     estudiante,
             "materia":        cal.get("materia"),
             "nota":           nota,
             "nota_anterior":  nota_ant,
             "variacion":      variacion,
-            "fecha_registro": cal.get("fecha"),
+            "fecha_registro": fecha_reg,
         }).execute()
     except Exception as e:
         logger.error(f"DB error guardando calificación: {e}")
