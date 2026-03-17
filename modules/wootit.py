@@ -277,21 +277,40 @@ def _procesar_calificaciones_json(rows: list, basal_notas: dict) -> list:
 
 def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> list:
     """
-    ESTRUCTURA DEFINITIVA CONFIRMADA via DevTools + PDF:
+    ESTRUCTURA DEFINITIVA CONFIRMADA via DevTools (indices exactos):
 
-    Un col-md-4 por TRIMESTRE. Dentro: todas las materias.
-    Consola: "Trimestre → 100, 60, 60, 60, 75.83"
-    PDF confirma: Conducta=100, Español=60, EE.SS.=60,
-                  Habilidades para la Vida=60, Progrentis=75.83
-    Las demás materias no tienen barra (sin nota aún).
+    Hijos del bloque col-md-4 (I Trimestre):
+      0: 'I Trimestre'        (header, sin-nota)
+      1: 'Agroecología'       (nombre, sin-nota)
+      2: ''                   (vacío)
+      3: 'Artes Plásticas'   (nombre, sin-nota)
+      4: ''                   (vacío)
+      ...
+      9: 'Conducta'           (nombre, sin-nota)
+     10: NOTA:100  '100.00'   ← tiene progress-bar aria-valuenow=100
+     11: 'Educación Bíblica'
+     12: ''
+      ...
+     21: 'Español'
+     22: NOTA:60  '60.00'
+     23: 'Estudios Sociales'
+     24: NOTA:60  '60.00'
+     25: 'Guía'
+     26: ''
+     27: 'Habilidades para la Vida'
+     28: NOTA:60  '60.00'
+      ...
+     39: 'Progrentis'
+     40: NOTA:75.83  '75.83'
+     41: 'Science'
+     42: ''
 
-    Cada materia dentro del bloque tiene:
-      - texto con el nombre
-      - 0 o 1 .progress con .progress-bar[aria-valuenow]
+    Patrón: cuando hijo[i] tiene progress-bar,
+    el nombre está en hijo[i-1] o hijo[i-2].
     """
     notas = []
 
-    # Tomar el bloque del I Trimestre (primera col-md-4)
+    # Tomar el primer col-md-4 (I Trimestre)
     bloques = soup.select(".col-md-4")
     if not bloques:
         bloques = soup.select(".col-sm-4, .col-lg-4")
@@ -301,82 +320,41 @@ def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> lis
         logger.warning("Calificaciones: no se encontró bloque col-md-4")
         return notas
 
-    # Dentro del bloque, cada materia es un div/elemento que puede tener
-    # texto de nombre y opcionalmente una .progress con barra
-    # Recorrer hijos directos del bloque
+    # Convertir hijos a lista
     hijos = [h for h in bloque.children if hasattr(h, 'get_text')]
-    
-    nombre_actual = ""
-    for hijo in hijos:
-        barra = hijo.select_one(".progress-bar") if hasattr(hijo, 'select_one') else None
-        texto_hijo = hijo.get_text(strip=True)
-        
-        if barra:
-            nota = barra.get("aria-valuenow") or barra.get_text(strip=True)
-            # El nombre ya debería estar en nombre_actual o en texto antes de la barra
-            if not nombre_actual:
-                # Intentar extraer del mismo elemento
-                for child in hijo.children:
-                    if hasattr(child, 'select') and child.select(".progress"):
-                        continue
-                    txt = child.get_text(strip=True) if hasattr(child, 'get_text') else ""
-                    if txt and len(txt) > 2 and not re.match(r"^[0-9. ]+$", txt):
-                        nombre_actual = txt[:80]
-                        break
-            if nombre_actual and nota:
-                try:
-                    float(str(nota))
-                    _agregar_nota(notas, nombre_actual, str(nota), basal_notas)
-                    logger.debug(f"  ✓ {nombre_actual} = {nota}")
-                except (ValueError, TypeError):
-                    pass
-            nombre_actual = ""
-        elif texto_hijo and len(texto_hijo) > 2 and not re.match(r"^[0-9. ]+$", texto_hijo):
-            # Es un nombre de materia sin barra (sin nota aún)
-            nombre_actual = texto_hijo[:80]
-        else:
-            nombre_actual = ""
 
-    # Si no encontró nada con hijos directos, probar subcontenedores
-    if not notas:
-        for barra in bloque.select(".progress-bar"):
+    nombre_pendiente = ""
+    for i, hijo in enumerate(hijos):
+        barra = hijo.select_one(".progress-bar") if hasattr(hijo, 'select_one') else None
+
+        if barra:
+            # Este hijo tiene una nota
             nota = barra.get("aria-valuenow") or barra.get_text(strip=True)
-            if not nota:
-                continue
             try:
                 float(str(nota))
             except (ValueError, TypeError):
+                nombre_pendiente = ""
                 continue
-            # Subir hasta encontrar nombre
-            el = barra.parent
-            nombre = ""
-            for _ in range(5):
-                if not el:
-                    break
-                for child in el.children:
-                    if hasattr(child, 'select') and child.select(".progress"):
-                        continue
-                    txt = child.get_text(strip=True) if hasattr(child, 'get_text') else str(child).strip()
-                    if txt and len(txt) > 2 and not re.match(r"^[0-9. ]+$", txt):
-                        nombre = txt[:80]
-                        break
-                if nombre:
-                    break
-                el = el.parent
-            if nombre:
-                _agregar_nota(notas, nombre, str(nota), basal_notas)
 
-    # Fallback tablas
-    if not notas:
-        for fila in soup.select("table tr")[1:]:
-            celdas = fila.select("td")
-            if len(celdas) >= 2:
-                materia = celdas[0].get_text(strip=True)
-                nota    = celdas[1].get_text(strip=True)
-                if materia and nota and len(materia) > 1:
-                    _agregar_nota(notas, materia, nota, basal_notas)
+            # El nombre está en el hijo anterior que tenga texto no-vacío
+            if nombre_pendiente:
+                _agregar_nota(notas, nombre_pendiente, str(nota), basal_notas)
+                logger.debug(f"  ✓ {nombre_pendiente} = {nota}")
+            nombre_pendiente = ""
+        else:
+            # Este hijo puede ser un nombre de materia
+            txt = hijo.get_text(strip=True)
+            if txt and len(txt) > 2 and not re.match(r'^[0-9. ]+$', txt):
+                # Es un nombre de materia — guardarlo para la barra siguiente
+                nombre_pendiente = txt[:80]
+            elif not txt or txt.isspace():
+                # Hijo vacío — no limpiar nombre_pendiente
+                pass
+            else:
+                nombre_pendiente = ""
 
-    logger.info(f"Calificaciones: {len(notas)} con nota (de {len(bloques)} bloques trimestre)")
+    logger.info(f"Calificaciones: {len(notas)} materias con nota "
+                f"(de {len(hijos)} hijos en bloque I Trimestre)")
     return notas
 
 def _agregar_nota(notas: list, materia: str, nota: str, basal_notas: dict):
