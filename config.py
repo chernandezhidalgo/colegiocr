@@ -13,12 +13,12 @@ BASE_URL    = "https://www.wootit.com/adventistacademy"
 
 # ── Estudiantes ────────────────────────────────────────────────────────────
 HIJO1_LABEL  = "Carlos Emiliano Hernández"
-HIJO1_NOMBRE = "Carlos"
+HIJO1_NOMBRE = "Emiliano"
 HIJO1_GRADO  = "Sétimo"
 HIJO1_ID     = "user213"
 
 HIJO2_LABEL  = "Starling Andrés Hernández"
-HIJO2_NOMBRE = "Starling"
+HIJO2_NOMBRE = "Andrés"
 HIJO2_GRADO  = "Octavo"
 HIJO2_ID     = "user240"
 

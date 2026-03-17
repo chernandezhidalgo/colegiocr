@@ -25,10 +25,42 @@ logger = logging.getLogger(__name__)
 
 # ── Utilidades ────────────────────────────────────────────────────────────────
 
+# Meses en inglés para parsear fechas WootIT ("March, 17 2026 14:51:42 -0600")
+_MESES_EN = {
+    "january":1,"february":2,"march":3,"april":4,"may":5,"june":6,
+    "july":7,"august":8,"september":9,"october":10,"november":11,"december":12,
+    "jan":1,"feb":2,"mar":3,"apr":4,"jun":6,"jul":7,"aug":8,
+    "sep":9,"oct":10,"nov":11,"dec":12,
+}
+
+def _parsear_fecha_wootit(s: str):
+    """
+    Parsea "March, 17 2026 14:51:42 -0600" → date object.
+    También maneja "March, 17" (sin año → año actual).
+    """
+    try:
+        # Normalizar: quitar coma, split
+        s2 = s.replace(",", "").strip()
+        parts = s2.split()
+        # ["March", "17", "2026", "14:51:42", "-0600"]
+        mes_str = parts[0].lower()
+        mes = _MESES_EN.get(mes_str)
+        if not mes:
+            return None
+        dia = int(parts[1])
+        # Año puede estar en posición 2 o no estar
+        anio = date.today().year
+        if len(parts) >= 3 and parts[2].isdigit() and len(parts[2]) == 4:
+            anio = int(parts[2])
+        return date(anio, mes, dia)
+    except Exception:
+        return None
+
+
 def _dias_hasta(fecha_val) -> int:
     if not fecha_val:
         return 999
-    # Timestamp epoch ms (Lucee: /Date(1234567890000-0600)/ o número)
+    # Timestamp epoch ms
     if isinstance(fecha_val, (int, float)):
         try:
             d = datetime.fromtimestamp(fecha_val / 1000, tz=TZ_CR).date()
@@ -44,7 +76,12 @@ def _dias_hasta(fecha_val) -> int:
             return (d - date.today()).days
         except Exception:
             return 999
-    # Formatos string estándar
+    # Formato WootIT: "March, 17 2026 ..."
+    if any(mes in s.lower() for mes in _MESES_EN):
+        d = _parsear_fecha_wootit(s)
+        if d:
+            return (d - date.today()).days
+    # Formatos ISO estándar
     for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S",
                 "%d/%m/%Y %H:%M", "%Y-%m-%d", "%d/%m/%Y"]:
         try:
@@ -71,6 +108,11 @@ def _fecha_legible(fecha_val) -> str:
                 int(m.group(1)) / 1000, tz=TZ_CR).strftime("%d/%m/%Y")
         except Exception:
             pass
+    # Formato WootIT: "March, 17 2026 ..."
+    if any(mes in s.lower() for mes in _MESES_EN):
+        d = _parsear_fecha_wootit(s)
+        if d:
+            return d.strftime("%d/%m/%Y")
     return s[:10]
 
 

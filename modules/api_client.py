@@ -126,6 +126,12 @@ class WootITClient:
             return False
 
     def cambiar_estudiante(self, nombre: str) -> bool:
+        """
+        Establece el userId del estudiante activo.
+        WootIT usa userId como parámetro en los CFCs — no hay endpoint
+        de "cambio de sesión" server-side. El userId se pasa directamente
+        en cada llamada CFC como parámetro.
+        """
         user_num = ESTUDIANTES_NUM.get(nombre)
         if not user_num:
             logger.error(f"ID no encontrado para: {nombre}")
@@ -133,50 +139,7 @@ class WootITClient:
 
         self._user_id_activo = user_num
         self._estudiante_activo = nombre
-
-        # Estrategia 1: getOpcionesEspeciales con userId
-        for method in ["getOpcionesEspeciales", "setEstudiante", "cambiarEstudiante",
-                        "selectEstudiante", "getEstudiante"]:
-            try:
-                r = self.cfc_get("home/cfc/home.cfc", method,
-                                 {"userRole": "padres", "idUsuario": user_num,
-                                  "userId": user_num})
-                logger.info(f"home.cfc/{method}(userId={user_num}): {str(r)[:150]}")
-                break
-            except Exception as e:
-                logger.debug(f"  {method}: {e}")
-
-        # Estrategia 2: POST al home con userId (como hace el JS del portal)
-        try:
-            resp = self.session.post(
-                f"{BASE}/home/cfc/home.cfc",
-                data={"method": "getNext", "returnformat": "json",
-                      "idUsuario": user_num, "userId": user_num},
-                timeout=15,
-            )
-            data = resp.json()
-            logger.info(f"POST home.cfc/getNext(userId={user_num}): keys={list(data.keys())}")
-            for k, v in data.items():
-                if isinstance(v, dict) and "COLUMNS" in v:
-                    rows = v.get("DATA", [])
-                    logger.info(f"   {k}: {len(rows)} filas")
-                    if rows:
-                        logger.info(f"   Primera fila: {dict(zip(v['COLUMNS'], rows[0]))}")
-        except Exception as e:
-            logger.warning(f"POST getNext userId: {e}")
-
-        # Estrategia 3: navegación al home con parámetro
-        try:
-            resp = self.session.get(
-                f"{BASE}/home/",
-                params={"idUsuario": user_num, "userId": user_num},
-                timeout=15,
-            )
-            logger.info(f"GET home/?userId={user_num}: {resp.status_code} | url={resp.url}")
-        except Exception as e:
-            logger.warning(f"GET home userId: {e}")
-
-        logger.info(f"Estudiante activo: {nombre} (ID={user_num})")
+        logger.info(f"✅ Estudiante activo: {nombre} (userId={user_num})")
         return True
 
     def cfc_get(self, cfc_path: str, method: str, params: dict = None) -> dict:
@@ -210,22 +173,7 @@ class WootITClient:
             p = {**p, "idUsuario": self._user_id_activo}
         resp = self.session.get(url, params=p if p else None, timeout=20)
         resp.raise_for_status()
-        html = resp.text
-
-        # Diagnóstico: loguear estructura del HTML para entender qué devuelve
-        soup = BeautifulSoup(html, "lxml")
-        title = soup.title.string if soup.title else "sin-título"
-        tables = soup.find_all("table")
-        all_classes = set()
-        for tag in soup.find_all(True, limit=150):
-            for c in tag.get("class", []):
-                all_classes.add(c)
-        logger.info(f"HTML {path}: title='{title}' | tablas={len(tables)} | "
-                    f"clases={sorted(all_classes)[:15]}")
-        if tables:
-            logger.info(f"  Tabla[0] preview: {str(tables[0])[:300]}")
-
-        return soup
+        return BeautifulSoup(resp.text, "lxml")
 
     @staticmethod
     def query_to_dicts(data, key: str = None) -> list:
