@@ -11,7 +11,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import config
-from modules.browser import get_browser, login, cambiar_estudiante
+from modules.api_client import WootITClient
 from modules.clasificador import clasificar_mensaje
 from modules.database import registrar_ejecucion, guardar_mensaje, guardar_calificacion
 from modules.mailer import enviar_correo, enviar_alerta_error
@@ -96,14 +96,15 @@ def main():
 
     # ── Iniciar navegador ─────────────────────────────────────────────────
     en_ci  = os.environ.get("CI", "").lower() == "true"
-    _pw, _browser, driver = get_browser(headless=en_ci)
+    client = WootITClient()
+    driver = client
     adjuntos_para_correo = []
     datos_estudiantes    = []
     correo_ok            = False
 
     try:
         # ── Login ─────────────────────────────────────────────────────────
-        if not login(driver):
+        if not client.login():
             logger.error("Login fallido tras 3 intentos.")
             registrar_ejecucion('noche', 'error_login', 'Login fallo 3 veces.', False)
             enviar_alerta_error('6:00 PM', "Login fallo 3 veces consecutivas.")
@@ -128,7 +129,7 @@ def main():
                     adjuntos_para_correo.append(adj['ruta'])
 
         # ── Cambiar a Estudiante 2: Starling Andrés ───────────────────────
-        cambio_ok = cambiar_estudiante(driver, 'Starling Andrés', '8° Grado')
+        cambio_ok = client.cambiar_estudiante('Starling Andrés')
         if not cambio_ok:
             logger.error("No se pudo cambiar a Starling Andres.")
             datos_estudiantes.append({
@@ -176,8 +177,7 @@ def main():
     finally:
         if datos_estudiantes:
             _persistir_en_supabase(datos_estudiantes, 'noche', correo_ok)
-        _browser.close()
-        _pw.stop()
+        pass  # HTTP client: sin recursos que cerrar
 
 
 if __name__ == '__main__':

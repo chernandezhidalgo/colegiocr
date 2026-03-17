@@ -25,7 +25,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import config
-from modules.browser import get_browser, login, cambiar_estudiante
+from modules.api_client import WootITClient
 from modules.clasificador import clasificar_mensaje
 from modules.database import registrar_ejecucion, guardar_mensaje, guardar_calificacion
 from modules.mailer import enviar_correo, enviar_alerta_error
@@ -403,13 +403,13 @@ def main():
 
     logger.info(f"Ventana temporal: {fecha_desde} → {fecha_hasta}")
 
-    en_ci  = os.environ.get("CI","").lower() == "true"
-    _pw, _browser, driver = get_browser(headless=en_ci)
+    client = WootITClient()
+    driver = client  # alias para compatibilidad con wootit.py
     datos_estudiantes = []
     correo_ok         = False
 
     try:
-        if not login(driver):
+        if not client.login():
             logger.error("Login fallido.")
             enviar_alerta_error('BASAL', 'Login fallido en levantamiento basal.')
             sys.exit(1)
@@ -427,23 +427,17 @@ def main():
         _os.makedirs('/tmp/screenshots', exist_ok=True)
 
         datos1['mensajes']       = _enriquecer_mensajes(revisar_mensajes(driver, ventana_desde, basal_vacio))
-        driver.screenshot(path='/tmp/screenshots/carlos_mensajes.png')
 
         datos1['calificaciones'] = revisar_calificaciones(driver, basal_vacio)
-        driver.screenshot(path='/tmp/screenshots/carlos_calificaciones.png')
 
         datos1['asistencia']     = revisar_asistencia(driver, basal_vacio)
-        driver.screenshot(path='/tmp/screenshots/carlos_asistencia.png')
 
         datos1['boleta']         = revisar_seccion_simple(driver, 'boleta',     basal_vacio, 'Lista todos los registros de conducta y boleta disponibles.')
-        driver.screenshot(path='/tmp/screenshots/carlos_boleta.png')
 
         datos1['anotaciones']    = revisar_seccion_simple(driver, 'anotaciones', basal_vacio, 'Lista todas las anotaciones con fecha, tipo, descripcion y profesor.')
         datos1['aula_virtual']   = revisar_aula_virtual(driver, ventana_desde, basal_vacio)
-        driver.screenshot(path='/tmp/screenshots/carlos_aula_virtual.png')
 
         datos1['agenda']         = revisar_agenda(driver, basal_vacio)
-        driver.screenshot(path='/tmp/screenshots/carlos_agenda.png')
         datos_estudiantes.append(datos1)
 
         # Guardar basal de Carlos
@@ -456,7 +450,7 @@ def main():
 
         # ── Estudiante 2: Starling Andrés ─────────────────────────────────
         logger.info("── Cambiando a Starling Andrés ──")
-        cambio_ok = cambiar_estudiante(driver, 'Starling Andrés', '8° Grado')
+        cambio_ok = client.cambiar_estudiante('Starling Andrés')
         if not cambio_ok:
             logger.warning("Cambio a Starling falló — registrando error parcial")
             datos_estudiantes.append({
@@ -475,18 +469,13 @@ def main():
                 'grado':        config.HIJO2_GRADO,
             }
             datos2['mensajes']       = _enriquecer_mensajes(revisar_mensajes(driver, ventana_desde, basal_vacio))
-            driver.screenshot(path='/tmp/screenshots/starling_mensajes.png')
-            datos2['calificaciones'] = revisar_calificaciones(driver, basal_vacio)
-            driver.screenshot(path='/tmp/screenshots/starling_calificaciones.png')
-            datos2['asistencia']     = revisar_asistencia(driver, basal_vacio)
-            driver.screenshot(path='/tmp/screenshots/starling_asistencia.png')
-            datos2['boleta']         = revisar_seccion_simple(driver, 'boleta',      basal_vacio, 'Lista todos los registros de conducta.')
+                datos2['calificaciones'] = revisar_calificaciones(driver, basal_vacio)
+                datos2['asistencia']     = revisar_asistencia(driver, basal_vacio)
+                datos2['boleta']         = revisar_seccion_simple(driver, 'boleta',      basal_vacio, 'Lista todos los registros de conducta.')
             datos2['anotaciones']    = revisar_seccion_simple(driver, 'anotaciones',  basal_vacio, 'Lista todas las anotaciones.')
             datos2['aula_virtual']   = revisar_aula_virtual(driver, ventana_desde, basal_vacio)
-            driver.screenshot(path='/tmp/screenshots/starling_aula_virtual.png')
-            datos2['agenda']         = revisar_agenda(driver, basal_vacio)
-            driver.screenshot(path='/tmp/screenshots/starling_agenda.png')
-            datos_estudiantes.append(datos2)
+                datos2['agenda']         = revisar_agenda(driver, basal_vacio)
+                datos_estudiantes.append(datos2)
 
             guardar_basal('andres', {
                 'calificaciones': {c['materia']: c['nota'] for c in datos2['calificaciones']
@@ -515,8 +504,7 @@ def main():
     finally:
         if datos_estudiantes:
             _persistir_basal(datos_estudiantes)
-        _browser.close()
-        _pw.stop()
+        pass  # HTTP client: sin recursos que cerrar
         logger.info("Levantamiento basal completado.")
 
 

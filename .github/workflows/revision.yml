@@ -8,7 +8,7 @@ on:
 jobs:
   revision:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
 
     steps:
       - name: Checkout código
@@ -30,15 +30,11 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Instalar Playwright Chromium
-        run: playwright install chromium --with-deps
-
       - name: Crear directorios
         run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal /tmp/screenshots
 
       - name: Ejecutar revisión diaria
         env:
-          CI: "true"
           WOOTIT_USER:       ${{ secrets.WOOTIT_USER }}
           WOOTIT_PASS:       ${{ secrets.WOOTIT_PASS }}
           GMAIL_PASS:        ${{ secrets.GMAIL_PASS }}
@@ -52,7 +48,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: logs-${{ github.run_id }}
-          path: |
-            /tmp/logs/
-            /tmp/screenshots/
+          path: /tmp/logs/
           retention-days: 30
