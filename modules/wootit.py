@@ -335,7 +335,7 @@ def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> lis
     if not notas:
         for el in soup.select(".calificaciones *"):
             txt = el.get_text(strip=True)
-            if re.match(r'^\d{2,3}(\.\d+)?$', txt):  # número tipo nota
+            if re.match(r'^[0-9]{2,3}(\.\d+)?$', txt):  # número tipo nota
                 # Buscar nombre en elemento hermano o padre
                 parent = el.parent
                 if parent:
