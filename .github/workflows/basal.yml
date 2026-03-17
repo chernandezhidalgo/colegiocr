@@ -18,17 +18,18 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Instalar Chrome estable
+      - name: Verificar Chrome disponible
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y google-chrome-stable 2>/dev/null || \
-          (wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
-           sudo apt-get install -y /tmp/chrome.deb)
-          google-chrome --version
-          which google-chrome
+          echo "=== Chrome en el sistema ==="
+          google-chrome --version || google-chrome-stable --version || chromium --version || echo "Chrome no encontrado en PATH"
+          which google-chrome || which google-chrome-stable || which chromium || true
+          echo "=== Todos los binarios chrome* ==="
+          ls /usr/bin/google-chrome* /usr/bin/chromium* 2>/dev/null || true
+          ls /opt/google/chrome/ 2>/dev/null || true
 
       - name: Instalar dependencias del sistema
         run: |
+          sudo apt-get update -q
           sudo apt-get install -y -q tesseract-ocr tesseract-ocr-spa poppler-utils || true
 
       - name: Instalar dependencias Python
@@ -39,15 +40,14 @@ jobs:
       - name: Crear directorios
         run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal /tmp/screenshots
 
-      - name: Verificar entorno
+      - name: Verificar imports Python
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          python -c "import os; key=os.environ.get('ANTHROPIC_API_KEY',''); print('ANTHROPIC_API_KEY:', 'OK ('+str(len(key))+' chars)' if key else 'VACIA')"
+          python -c "import os; key=os.environ.get('ANTHROPIC_API_KEY',''); print('ANTHROPIC_API_KEY:', 'OK' if key else 'VACIA')"
           python -c "import selenium; print('selenium', selenium.__version__)"
-          python -c "import undetected_chromedriver as uc; print('undetected-chromedriver', uc.__version__)"
+          python -c "import undetected_chromedriver as uc; print('uc', uc.__version__)"
           python -c "import anthropic; print('anthropic', anthropic.__version__)"
-          google-chrome --version
 
       - name: Ejecutar levantamiento basal
         env:

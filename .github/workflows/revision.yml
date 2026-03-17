@@ -20,16 +20,9 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Instalar Chrome estable
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y google-chrome-stable 2>/dev/null || \
-          (wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
-           sudo apt-get install -y /tmp/chrome.deb)
-          google-chrome --version
-
       - name: Instalar dependencias del sistema
         run: |
+          sudo apt-get update -q
           sudo apt-get install -y -q tesseract-ocr tesseract-ocr-spa poppler-utils || true
 
       - name: Instalar dependencias Python
