@@ -277,32 +277,101 @@ def _procesar_calificaciones_json(rows: list, basal_notas: dict) -> list:
 
 def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> list:
     notas = []
-    # Intentar múltiples selectores
-    for selector in ["table tr", ".calificacion-row", ".nota-row",
-                     "[class*='calific'] tr", "[class*='nota'] tr"]:
-        filas = soup.select(selector)
-        if len(filas) > 1:
-            for fila in filas[1:]:
-                celdas = fila.select("td")
-                if len(celdas) >= 2:
-                    materia = celdas[0].get_text(strip=True)
-                    nota    = celdas[1].get_text(strip=True)
-                    if materia and nota and len(materia) > 1 and len(nota) < 20:
-                        try:
-                            nn  = float(nota.replace(",", "."))
-                            est = "Aprobada" if nn >= 65 else "REPROBADA"
-                        except ValueError:
-                            nn, est = None, ""
-                        notas.append({
-                            "materia": materia, "nota": nota, "nota_num": nn,
-                            "nota_anterior": basal_notas.get(materia, "(sin historial)"),
-                            "cambio": nota != basal_notas.get(materia),
-                            "estado": est, "fecha": "",
-                        })
-            if notas:
-                break
+
+    # Estrategia 1: buscar elementos con data-nota o data-calificacion
+    for el in soup.select("[data-nota], [data-calificacion], [data-grade]"):
+        materia = el.get_text(strip=True)
+        nota = (el.get("data-nota") or el.get("data-calificacion")
+                or el.get("data-grade") or "")
+        if materia and nota:
+            _agregar_nota(notas, materia, str(nota), basal_notas)
+
+    # Estrategia 2: barras de progreso con style width o aria-valuenow
+    if not notas:
+        for barra in soup.select(".progress-bar, [role='progressbar']"):
+            nota = (barra.get("aria-valuenow") or
+                    barra.get("data-value") or "")
+            if nota:
+                # Buscar nombre de materia en elemento padre
+                padre = barra.parent
+                for _ in range(4):
+                    if padre:
+                        txt = padre.get_text(strip=True)
+                        if txt and len(txt) > 3:
+                            _agregar_nota(notas, txt[:50], str(nota), basal_notas)
+                            break
+                        padre = padre.parent
+
+    # Estrategia 3: selectores específicos de WootIT v3
+    if not notas:
+        for selector in [
+            ".calificaciones .materia", ".nota-container",
+            ".grade-item", ".course-grade", ".materia-nota",
+            "li.materia", ".cal-row", ".subject-row",
+            "[class*='materia']", "[class*='grade']", "[class*='nota']",
+        ]:
+            items = soup.select(selector)
+            if items:
+                logger.info(f"Calificaciones selector '{selector}': {len(items)} items")
+                for item in items:
+                    txt = item.get_text(separator="|", strip=True)
+                    parts = [p for p in txt.split("|") if p.strip()]
+                    if len(parts) >= 2:
+                        _agregar_nota(notas, parts[0], parts[1], basal_notas)
+                if notas:
+                    break
+
+    # Estrategia 4: tablas
+    if not notas:
+        for fila in soup.select("table tr")[1:]:
+            celdas = fila.select("td")
+            if len(celdas) >= 2:
+                materia = celdas[0].get_text(strip=True)
+                nota    = celdas[1].get_text(strip=True)
+                if materia and nota and len(materia) > 1 and len(nota) < 20:
+                    _agregar_nota(notas, materia, nota, basal_notas)
+
+    # Estrategia 5: cualquier elemento con texto numérico junto a nombre de materia
+    if not notas:
+        for el in soup.select(".calificaciones *"):
+            txt = el.get_text(strip=True)
+            if re.match(r'^\d{2,3}(\.\d+)?$', txt):  # número tipo nota
+                # Buscar nombre en elemento hermano o padre
+                parent = el.parent
+                if parent:
+                    sibling_text = " ".join(
+                        s.get_text(strip=True)
+                        for s in parent.children
+                        if hasattr(s, 'get_text') and s != el
+                    )
+                    if sibling_text and len(sibling_text) > 2:
+                        _agregar_nota(notas, sibling_text[:60], txt, basal_notas)
+
     logger.info(f"Calificaciones HTML: {len(notas)} materias")
     return notas
+
+
+def _agregar_nota(notas: list, materia: str, nota: str, basal_notas: dict):
+    """Helper para agregar nota a la lista evitando duplicados."""
+    materia = materia.strip()[:80]
+    nota    = nota.strip()
+    if not materia or len(materia) < 2:
+        return
+    if any(n["materia"] == materia for n in notas):
+        return
+    try:
+        nn  = float(nota.replace(",", "."))
+        if nn > 100:  # no es una nota válida
+            return
+        est = "Aprobada" if nn >= 65 else "REPROBADA"
+    except ValueError:
+        nn, est = None, ""
+    notas.append({
+        "materia": materia, "nota": nota, "nota_num": nn,
+        "nota_anterior": basal_notas.get(materia, "(sin historial)"),
+        "cambio": nota != basal_notas.get(materia),
+        "estado": est, "fecha": "",
+    })
 
 
 # ── ASISTENCIA ────────────────────────────────────────────────────────────────

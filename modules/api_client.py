@@ -407,10 +407,38 @@ class WootITClient:
 
     def get_calificaciones_html(self) -> BeautifulSoup:
         try:
-            return self.html_get("calificaciones/estudiante.cfm")
+            resp = self.session.get(f"{BASE}/calificaciones/estudiante.cfm", timeout=20)
+            resp.raise_for_status()
+            html = resp.text
+            # Guardar HTML completo para diagnóstico
+            import os
+            os.makedirs("/tmp/logs", exist_ok=True)
+            fname = f"/tmp/logs/calificaciones_{self._user_id_activo}.html"
+            with open(fname, "w", encoding="utf-8") as f:
+                f.write(html)
+            logger.info(f"HTML calificaciones guardado: {fname} ({len(html):,} chars)")
+            return BeautifulSoup(html, "lxml")
         except Exception as e:
             logger.warning(f"get_calificaciones_html: {e}")
             return BeautifulSoup("", "lxml")
+
+    def get_asistencia_raw_html(self) -> str:
+        """Retorna HTML crudo de asistencia para diagnóstico."""
+        try:
+            resp = self.session.get(
+                f"{BASE}/asistenciayconductaEst/index.cfm",
+                params={"sec": "asistencia"}, timeout=20)
+            html = resp.text
+            import os
+            os.makedirs("/tmp/logs", exist_ok=True)
+            fname = f"/tmp/logs/asistencia_{self._user_id_activo}.html"
+            with open(fname, "w", encoding="utf-8") as f:
+                f.write(html)
+            logger.info(f"HTML asistencia guardado: {fname} ({len(html):,} chars)")
+            return html
+        except Exception as e:
+            logger.warning(f"get_asistencia_raw_html: {e}")
+            return ""
 
     def get_mensajes_html(self) -> BeautifulSoup:
         try:

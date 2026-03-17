@@ -55,4 +55,5 @@ jobs:
           path: |
             /tmp/logs/
             /tmp/basal/
+            /tmp/logs/*.html
           retention-days: 90
