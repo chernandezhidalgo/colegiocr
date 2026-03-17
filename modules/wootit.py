@@ -156,20 +156,11 @@ def guardar_basal(key: str, datos: dict):
 # ── MENSAJES ──────────────────────────────────────────────────────────────────
 
 def revisar_mensajes(driver: WootITClient, ventana_desde, basal: dict) -> list:
-    # Intentar via CFC primero
-    for path, method in [
-        ("comunicacion/mensajes/cfc/mensajes.cfc", "getMensajes"),
-        ("comunicacion/mensajes/cfc/mensajes.cfc", "getRecibidos"),
-        ("comunicacion/cfc/mensajes.cfc", "getMensajes"),
-    ]:
-        try:
-            r = driver.cfc_get(path, method)
-            rows = WootITClient.query_to_dicts(r)
-            if rows:
-                logger.info(f"Mensajes via CFC ({method}): {len(rows)}")
-                return _procesar_mensajes_json(rows, ventana_desde)
-        except Exception:
-            pass
+    # Intentar via CFC JSON (endpoint confirmado del Network)
+    r = driver.get_mensajes_json()
+    rows = WootITClient.query_to_dicts(r)
+    if rows:
+        return _procesar_mensajes_json(rows, ventana_desde)
 
     # Fallback HTML
     soup = driver.get_mensajes_html()
@@ -235,24 +226,13 @@ def _procesar_mensajes_html(soup: BeautifulSoup, ventana_desde) -> list:
 def revisar_calificaciones(driver: WootITClient, basal: dict) -> list:
     basal_notas = basal.get("calificaciones", {})
 
-    # Intentar via CFC
-    for path, method in [
-        ("calificaciones/cfc/calificaciones.cfc", "getCalificaciones"),
-        ("calificaciones/cfc/calificaciones.cfc", "getNotas"),
-        ("calificaciones/cfc/calificaciones.cfc", "getAll"),
-        ("calificaciones/cfc/calificaciones.cfc", "getEstudiante"),
-        ("calificaciones/cfc/notas.cfc", "getNotas"),
-        ("calificaciones/cfc/notas.cfc", "getCalificaciones"),
-    ]:
-        try:
-            r = driver.cfc_get(path, method)
-            rows = WootITClient.query_to_dicts(r)
-            if rows:
-                logger.info(f"✅ Calificaciones via CFC ({path}/{method}): {len(rows)} filas")
-                logger.info(f"   Columnas: {list(rows[0].keys()) if rows else []}")
-                return _procesar_calificaciones_json(rows, basal_notas)
-        except Exception as e:
-            logger.debug(f"CFC {path}/{method}: {e}")
+    # Intentar via CFC JSON (búsqueda automática de endpoint)
+    r = driver.get_calificaciones_json()
+    rows = WootITClient.query_to_dicts(r)
+    if rows:
+        logger.info(f"Calificaciones JSON: {len(rows)} filas | "
+                    f"cols={list(rows[0].keys()) if rows else []}")
+        return _procesar_calificaciones_json(rows, basal_notas)
 
     # Fallback HTML scraping
     soup = driver.get_calificaciones_html()
@@ -318,32 +298,21 @@ def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> lis
 def revisar_asistencia(driver: WootITClient, basal: dict) -> dict:
     result = {"porcentaje": None, "total_ausencias": 0, "riesgo": False, "detalle": []}
 
-    # Intentar CFC
-    for path, method in [
-        ("asistenciayconductaEst/cfc/asistencia.cfc", "getAsistencia"),
-        ("asistenciayconductaEst/cfc/asistencia.cfc", "getResumen"),
-        ("asistenciayconductaEst/cfc/asistenciayconducta.cfc", "getAsistencia"),
-    ]:
-        try:
-            r = driver.cfc_get(path, method, {"sec": "asistencia"})
-            rows = WootITClient.query_to_dicts(r)
-            if rows:
-                logger.info(f"✅ Asistencia via CFC: {len(rows)} filas | cols={list(rows[0].keys())}")
-                for row in rows:
-                    m   = row.get("MATERIA") or row.get("CURSONOMBRE") or ""
-                    aus = str(row.get("AUSENCIAS") or row.get("FALTAS") or "0")
-                    pct = str(row.get("PORCENTAJE") or row.get("PCT") or "")
-                    if m:
-                        result["detalle"].append({"materia": m, "ausencias": aus, "pct": pct})
-                        try:
-                            result["total_ausencias"] += int(aus)
-                        except ValueError:
-                            pass
-                if result["detalle"]:
-                    logger.info(f"Asistencia CFC: {result['total_ausencias']} ausencias")
-                    return result
-        except Exception as e:
-            logger.debug(f"CFC asistencia {path}: {e}")
+    # Intentar via CFC JSON (búsqueda automática de endpoint)
+    r = driver.get_asistencia_json()
+    rows = WootITClient.query_to_dicts(r)
+    if rows:
+        logger.info(f"Asistencia JSON: {len(rows)} filas | cols={list(rows[0].keys()) if rows else []}")
+        for row in rows:
+            m   = row.get("MATERIA") or row.get("CURSONOMBRE") or ""
+            aus = str(row.get("AUSENCIAS") or row.get("FALTAS") or "0")
+            pct = str(row.get("PORCENTAJE") or row.get("PCT") or "")
+            if m:
+                result["detalle"].append({"materia": m, "ausencias": aus, "pct": pct})
+                try: result["total_ausencias"] += int(aus)
+                except ValueError: pass
+        logger.info(f"Asistencia: {result['total_ausencias']} ausencias totales")
+        return result
 
     # Fallback HTML
     soup = driver.get_asistencia_html()

@@ -212,6 +212,99 @@ class WootITClient:
             logger.warning(f"get_post_detalle({id_post}): {e}")
             return {}
 
+    def get_mensajes_json(self) -> dict:
+        """
+        Mensajes via CFC. Endpoint confirmado del Network:
+        comunicacion/cfc/mensajes.cfc
+        userId = QUSUARIO (480, el padre) — no el estudiante.
+        """
+        qusuario = self._cookies_dict.get("QUSUARIO", "480")
+        # Probar métodos en orden de probabilidad
+        for method in ["getRecibidos", "getMensajes", "getAll",
+                       "getMensajesRecibidos", "getTodos"]:
+            try:
+                r = self.session.get(
+                    f"{BASE}/comunicacion/cfc/mensajes.cfc",
+                    params={"method": method, "returnformat": "json",
+                            "userId": qusuario},
+                    timeout=20,
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    if isinstance(data, dict) and "COLUMNS" in data:
+                        logger.info(f"✅ mensajes.cfc/{method}: {len(data.get('DATA',[]))} filas")
+                        return data
+                    elif isinstance(data, list) and data:
+                        logger.info(f"✅ mensajes.cfc/{method} (list): {len(data)} items")
+                        return {"COLUMNS": list(data[0].keys()) if data else [],
+                                "DATA": [[v for v in row.values()] for row in data]}
+            except Exception as e:
+                logger.debug(f"mensajes.cfc/{method}: {e}")
+        logger.warning("mensajes.cfc: ningún método devolvió datos")
+        return {}
+
+    def get_calificaciones_json(self) -> dict:
+        """
+        Calificaciones via CFC. Patrón deducido del stack Lucee.
+        Probamos rutas y métodos comunes.
+        userId = ID del estudiante activo.
+        """
+        user = self._user_id_activo or 213
+        for path in ["calificaciones/cfc/calificaciones.cfc",
+                     "calificaciones/cfc/notas.cfc",
+                     "calificaciones/cfc/estudiante.cfc"]:
+            for method in ["getCalificaciones", "getNotas", "getEstudiante",
+                           "getAll", "getCalificacionesEstudiante", "get"]:
+                try:
+                    r = self.session.get(
+                        f"{BASE}/{path}",
+                        params={"method": method, "returnformat": "json",
+                                "userId": user, "idUsuario": user},
+                        timeout=15,
+                    )
+                    if r.status_code == 200 and "COLUMNS" in r.text[:300]:
+                        data = r.json()
+                        rows = data.get("DATA", [])
+                        if rows:
+                            logger.info(f"✅ {path}/{method}: {len(rows)} filas | "
+                                        f"cols={data.get('COLUMNS', [])[:6]}")
+                            return data
+                except Exception:
+                    pass
+        logger.warning("calificaciones CFC: ningún endpoint respondió con datos")
+        return {}
+
+    def get_asistencia_json(self) -> dict:
+        """
+        Asistencia via CFC.
+        userId = ID del estudiante activo.
+        """
+        user = self._user_id_activo or 213
+        for path in ["asistenciayconductaEst/cfc/asistencia.cfc",
+                     "asistenciayconductaEst/cfc/asistenciayconducta.cfc",
+                     "asistenciayconductaEst/cfc/asisEst.cfc"]:
+            for method in ["getAsistencia", "getResumen", "getAll",
+                           "getAsistenciaEstudiante", "get"]:
+                try:
+                    r = self.session.get(
+                        f"{BASE}/{path}",
+                        params={"method": method, "returnformat": "json",
+                                "userId": user, "idUsuario": user,
+                                "sec": "asistencia"},
+                        timeout=15,
+                    )
+                    if r.status_code == 200 and "COLUMNS" in r.text[:300]:
+                        data = r.json()
+                        rows = data.get("DATA", [])
+                        if rows:
+                            logger.info(f"✅ {path}/{method}: {len(rows)} filas | "
+                                        f"cols={data.get('COLUMNS', [])[:6]}")
+                            return data
+                except Exception:
+                    pass
+        logger.warning("asistencia CFC: ningún endpoint respondió con datos")
+        return {}
+
     def get_calificaciones_html(self) -> BeautifulSoup:
         try:
             return self.html_get("calificaciones/estudiante.cfm")
