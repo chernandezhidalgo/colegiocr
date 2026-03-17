@@ -101,6 +101,10 @@ class WootITClient:
         if jwt:
             payload = _decodificar_jwt(jwt)
             logger.info(f"🔑 JWT payload: {payload}")
+            # Agregar JWT como header Authorization para CFCs que lo requieran
+            self.session.headers.update({
+                "Authorization": f"Bearer {jwt}",
+            })
 
         # QUSUARIO = ID del padre/tutor en sesión
         qusuario = self._cookies_dict.get("QUSUARIO", "")
@@ -257,30 +261,39 @@ class WootITClient:
 
     def get_calificaciones_json(self) -> dict:
         """
-        Calificaciones via CFC. Patrón deducido del stack Lucee.
-        Probamos rutas y métodos comunes.
-        userId = ID del estudiante activo.
+        Calificaciones via CFC con JWT Authorization header.
+        Prueba múltiples rutas y métodos.
         """
         user = self._user_id_activo or 213
-        for path in ["calificaciones/cfc/calificaciones.cfc",
-                     "calificaciones/cfc/notas.cfc",
-                     "calificaciones/cfc/estudiante.cfc"]:
-            for method in ["getCalificaciones", "getNotas", "getEstudiante",
-                           "getAll", "getCalificacionesEstudiante", "get"]:
+        paths = [
+            "calificaciones/cfc/calificaciones.cfc",
+            "calificaciones/cfc/notas.cfc",
+            "calificaciones/cfc/estudiante.cfc",
+            "calificaciones/cfc/calificacion.cfc",
+        ]
+        methods = ["getCalificaciones", "getNotas", "getEstudiante",
+                   "getAll", "get", "getCalificacionesEstudiante",
+                   "getNota", "getResumen", "getCalificacion"]
+        for path in paths:
+            for method in methods:
                 try:
                     r = self.session.get(
                         f"{BASE}/{path}",
                         params={"method": method, "returnformat": "json",
                                 "userId": user, "idUsuario": user},
-                        timeout=15,
+                        timeout=10,
                     )
-                    if r.status_code == 200 and "COLUMNS" in r.text[:300]:
-                        data = r.json()
-                        rows = data.get("DATA", [])
-                        if rows:
-                            logger.info(f"✅ {path}/{method}: {len(rows)} filas | "
-                                        f"cols={data.get('COLUMNS', [])[:6]}")
-                            return data
+                    if r.status_code == 200:
+                        text = r.text.strip()
+                        if "COLUMNS" in text[:200]:
+                            data = r.json()
+                            rows = data.get("DATA", [])
+                            if rows:
+                                logger.info(f"✅ CALIFICACIONES {path}/{method}: "
+                                            f"{len(rows)} filas | cols={data.get('COLUMNS',[])[:6]}")
+                                return data
+                        elif text and text != "null" and "{}" not in text[:10]:
+                            logger.info(f"   cal {path}/{method}: {text[:100]}")
                 except Exception:
                     pass
         logger.warning("calificaciones CFC: ningún endpoint respondió con datos")
@@ -288,30 +301,39 @@ class WootITClient:
 
     def get_asistencia_json(self) -> dict:
         """
-        Asistencia via CFC.
-        userId = ID del estudiante activo.
+        Asistencia via CFC con JWT Authorization header.
         """
         user = self._user_id_activo or 213
-        for path in ["asistenciayconductaEst/cfc/asistencia.cfc",
-                     "asistenciayconductaEst/cfc/asistenciayconducta.cfc",
-                     "asistenciayconductaEst/cfc/asisEst.cfc"]:
-            for method in ["getAsistencia", "getResumen", "getAll",
-                           "getAsistenciaEstudiante", "get"]:
+        paths = [
+            "asistenciayconductaEst/cfc/asistencia.cfc",
+            "asistenciayconductaEst/cfc/asistenciayconducta.cfc",
+            "asistenciayconductaEst/cfc/asisEst.cfc",
+            "asistenciayconductaEst/cfc/asistenciaEst.cfc",
+            "asistenciayconductaEst/cfc/asistenciayconductaEst.cfc",
+        ]
+        methods = ["getAsistencia", "getResumen", "getAll",
+                   "getAsistenciaEstudiante", "get", "getDetalle",
+                   "getAsistenciaAlumno", "getPorcentaje"]
+        for path in paths:
+            for method in methods:
                 try:
                     r = self.session.get(
                         f"{BASE}/{path}",
                         params={"method": method, "returnformat": "json",
-                                "userId": user, "idUsuario": user,
-                                "sec": "asistencia"},
-                        timeout=15,
+                                "userId": user, "idUsuario": user},
+                        timeout=10,
                     )
-                    if r.status_code == 200 and "COLUMNS" in r.text[:300]:
-                        data = r.json()
-                        rows = data.get("DATA", [])
-                        if rows:
-                            logger.info(f"✅ {path}/{method}: {len(rows)} filas | "
-                                        f"cols={data.get('COLUMNS', [])[:6]}")
-                            return data
+                    if r.status_code == 200:
+                        text = r.text.strip()
+                        if "COLUMNS" in text[:200]:
+                            data = r.json()
+                            rows = data.get("DATA", [])
+                            if rows:
+                                logger.info(f"✅ ASISTENCIA {path}/{method}: "
+                                            f"{len(rows)} filas | cols={data.get('COLUMNS',[])[:6]}")
+                                return data
+                        elif text and text != "null" and "{}" not in text[:10]:
+                            logger.info(f"   asis {path}/{method}: {text[:100]}")
                 except Exception:
                     pass
         logger.warning("asistencia CFC: ningún endpoint respondió con datos")
