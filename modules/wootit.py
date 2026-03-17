@@ -156,7 +156,13 @@ def guardar_basal(key: str, datos: dict):
 # ── MENSAJES ──────────────────────────────────────────────────────────────────
 
 def revisar_mensajes(driver: WootITClient, ventana_desde, basal: dict) -> list:
-    # Intentar via CFC JSON (endpoint confirmado del Network)
+    # Intentar via REST backend.wootit.com/v1/
+    rows_rest = driver.get_mensajes_rest()
+    if rows_rest:
+        logger.info(f"Mensajes REST: {len(rows_rest)}")
+        return _procesar_mensajes_json(rows_rest, ventana_desde)
+
+    # Intentar via CFC JSON
     r = driver.get_mensajes_json()
     rows = WootITClient.query_to_dicts(r)
     if rows:
@@ -226,12 +232,18 @@ def _procesar_mensajes_html(soup: BeautifulSoup, ventana_desde) -> list:
 def revisar_calificaciones(driver: WootITClient, basal: dict) -> list:
     basal_notas = basal.get("calificaciones", {})
 
-    # Intentar via CFC JSON (búsqueda automática de endpoint)
+    # Intentar via REST backend.wootit.com/v1/
+    rows_rest = driver.get_calificaciones_rest()
+    if rows_rest:
+        logger.info(f"Calificaciones REST: {len(rows_rest)} items")
+        return _procesar_calificaciones_json(
+            rows_rest if isinstance(rows_rest[0], dict) else [], basal_notas)
+
+    # Intentar via CFC JSON
     r = driver.get_calificaciones_json()
     rows = WootITClient.query_to_dicts(r)
     if rows:
-        logger.info(f"Calificaciones JSON: {len(rows)} filas | "
-                    f"cols={list(rows[0].keys()) if rows else []}")
+        logger.info(f"Calificaciones CFC: {len(rows)} filas")
         return _procesar_calificaciones_json(rows, basal_notas)
 
     # Fallback HTML scraping
@@ -298,7 +310,23 @@ def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> lis
 def revisar_asistencia(driver: WootITClient, basal: dict) -> dict:
     result = {"porcentaje": None, "total_ausencias": 0, "riesgo": False, "detalle": []}
 
-    # Intentar via CFC JSON (búsqueda automática de endpoint)
+    # Intentar via REST backend.wootit.com/v1/
+    rows_rest = driver.get_asistencia_rest()
+    if rows_rest:
+        logger.info(f"Asistencia REST: {len(rows_rest)} items")
+        for row in (rows_rest if isinstance(rows_rest, list) else []):
+            if isinstance(row, dict):
+                m   = str(row.get("materia") or row.get("curso") or row.get("MATERIA") or "")
+                aus = str(row.get("ausencias") or row.get("faltas") or row.get("AUSENCIAS") or "0")
+                pct = str(row.get("porcentaje") or row.get("PCT") or "")
+                if m:
+                    result["detalle"].append({"materia": m, "ausencias": aus, "pct": pct})
+                    try: result["total_ausencias"] += int(aus)
+                    except ValueError: pass
+        if result["detalle"]:
+            return result
+
+    # Intentar via CFC JSON
     r = driver.get_asistencia_json()
     rows = WootITClient.query_to_dicts(r)
     if rows:

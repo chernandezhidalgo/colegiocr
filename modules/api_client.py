@@ -23,7 +23,8 @@ import config
 logger = logging.getLogger(__name__)
 
 TZ_CR = ZoneInfo("America/Costa_Rica")
-BASE  = config.BASE_URL
+BASE         = config.BASE_URL
+BACKEND      = "https://backend.wootit.com"
 
 ESTUDIANTES_IDS = {
     "Carlos Emiliano": "user213",
@@ -444,3 +445,97 @@ class WootITClient:
         except Exception as e:
             logger.warning(f"get_anotaciones_html: {e}")
             return BeautifulSoup("", "lxml")
+
+    def rest_get(self, path: str, params: dict = None) -> dict:
+        """
+        GET a la API REST backend.wootit.com/v1/
+        Descubierta via interceptor: backend.wootit.com/v1/calendar/next
+        """
+        url = f"{BACKEND}{path}"
+        try:
+            resp = self.session.get(url, params=params, timeout=15)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            logger.debug(f"REST GET {path}: {e}")
+            return {}
+
+    def get_calificaciones_rest(self) -> list:
+        """
+        Prueba endpoints REST en backend.wootit.com/v1/ para calificaciones.
+        """
+        user = self._user_id_activo or 213
+        endpoints = [
+            f"/v1/grades",
+            f"/v1/grades/{user}",
+            f"/v1/calificaciones",
+            f"/v1/calificaciones/{user}",
+            f"/v1/students/{user}/grades",
+            f"/v1/students/{user}/calificaciones",
+            f"/v1/notas",
+            f"/v1/notas/{user}",
+        ]
+        for ep in endpoints:
+            try:
+                r = self.session.get(f"{BACKEND}{ep}",
+                    params={"idEst": user, "userId": user},
+                    timeout=10)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data and data != [] and data != {}:
+                        logger.info(f"✅ REST calificaciones {ep}: {str(data)[:150]}")
+                        return data if isinstance(data, list) else [data]
+            except Exception:
+                pass
+        return []
+
+    def get_asistencia_rest(self) -> list:
+        """
+        Prueba endpoints REST en backend.wootit.com/v1/ para asistencia.
+        """
+        user = self._user_id_activo or 213
+        endpoints = [
+            f"/v1/attendance",
+            f"/v1/attendance/{user}",
+            f"/v1/asistencia",
+            f"/v1/asistencia/{user}",
+            f"/v1/students/{user}/attendance",
+            f"/v1/students/{user}/asistencia",
+        ]
+        for ep in endpoints:
+            try:
+                r = self.session.get(f"{BACKEND}{ep}",
+                    params={"idEst": user, "userId": user},
+                    timeout=10)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data and data != [] and data != {}:
+                        logger.info(f"✅ REST asistencia {ep}: {str(data)[:150]}")
+                        return data if isinstance(data, list) else [data]
+            except Exception:
+                pass
+        return []
+
+    def get_mensajes_rest(self) -> list:
+        """
+        Prueba endpoints REST en backend.wootit.com/v1/ para mensajes.
+        """
+        qusuario = self._cookies_dict.get("QUSUARIO", "480")
+        endpoints = [
+            "/v1/messages",
+            f"/v1/messages/{qusuario}",
+            "/v1/mensajes",
+            f"/v1/mensajes/{qusuario}",
+            "/v1/inbox",
+        ]
+        for ep in endpoints:
+            try:
+                r = self.session.get(f"{BACKEND}{ep}", timeout=10)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data and data != [] and data != {}:
+                        logger.info(f"✅ REST mensajes {ep}: {str(data)[:150]}")
+                        return data if isinstance(data, list) else [data]
+            except Exception:
+                pass
+        return []
