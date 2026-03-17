@@ -3,6 +3,10 @@ name: ColegioCR - Levantamiento Basal
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  secrets: write
+
 jobs:
   basal:
     runs-on: ubuntu-latest
@@ -45,6 +49,7 @@ jobs:
           SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY:      ${{ secrets.SUPABASE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN:      ${{ secrets.GITHUB_TOKEN }}
         run: python basal.py
 
       - name: Subir artefactos

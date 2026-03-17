@@ -22,6 +22,13 @@ import config
 
 logger = logging.getLogger(__name__)
 
+# Importar módulo de refresh (si está disponible)
+try:
+    from modules.token_refresh import renovar_token
+    _REFRESH_DISPONIBLE = True
+except ImportError:
+    _REFRESH_DISPONIBLE = False
+
 TZ_CR = ZoneInfo("America/Costa_Rica")
 BASE         = config.BASE_URL
 BACKEND      = "https://backend.wootit.com"
@@ -90,6 +97,10 @@ class WootITClient:
         if not cookie_str:
             logger.error("❌ Secret WOOTIT_COOKIES no configurado.")
             return False
+
+        # Renovar JWT si está expirado antes de proceder
+        if _REFRESH_DISPONIBLE:
+            cookie_str = renovar_token(cookie_str)
 
         self._cookies_dict = _parsear_cookie_string(cookie_str)
         for name, value in self._cookies_dict.items():
