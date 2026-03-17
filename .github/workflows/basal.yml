@@ -39,6 +39,7 @@ jobs:
 
       - name: Ejecutar levantamiento basal
         env:
+          WOOTIT_COOKIES:    ${{ secrets.WOOTIT_COOKIES }}
           WOOTIT_USER:       ${{ secrets.WOOTIT_USER }}
           WOOTIT_PASS:       ${{ secrets.WOOTIT_PASS }}
           GMAIL_PASS:        ${{ secrets.GMAIL_PASS }}
