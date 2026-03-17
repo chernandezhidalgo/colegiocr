@@ -16,11 +16,13 @@ HIJO1_LABEL  = "Carlos Emiliano Hernández"
 HIJO1_NOMBRE = "Emiliano"
 HIJO1_GRADO  = "Sétimo"
 HIJO1_ID     = "user213"
+HIJO1_QUSUARIO = ""   # Por confirmar — activar Carlos y ver QUSUARIO
 
 HIJO2_LABEL  = "Starling Andrés Hernández"
 HIJO2_NOMBRE = "Andrés"
 HIJO2_GRADO  = "Octavo"
 HIJO2_ID     = "user240"
+HIJO2_QUSUARIO = "534"   # ID de sesión real (QUSUARIO) de Starling
 
 # ── Gmail ──────────────────────────────────────────────────────────────────
 GMAIL_FROM = "chdezhidalgo@gmail.com"

@@ -34,13 +34,20 @@ BASE         = config.BASE_URL
 BACKEND      = "https://backend.wootit.com"
 
 ESTUDIANTES_IDS = {
-    "Carlos Emiliano": "user213",
-    "Starling Andrés":  "user240",
+    "Carlos Emiliano": "user213",  # ID del avatar en menú (changeSon)
+    "Starling Andrés":  "user240", # ID del avatar en menú (changeSon)
 }
 
 ESTUDIANTES_NUM = {
-    "Carlos Emiliano": 213,
-    "Starling Andrés":  240,
+    "Carlos Emiliano": 213,  # ID de changeSon()
+    "Starling Andrés":  240, # ID de changeSon()
+}
+
+# QUSUARIO = ID real de sesión (cambia al seleccionar hijo)
+# 534 confirmado para Starling vía DevTools Application → Cookies
+ESTUDIANTES_QUSUARIO = {
+    "Carlos Emiliano": None,  # Por confirmar — activar Carlos y ver QUSUARIO
+    "Starling Andrés":  534,
 }
 
 
@@ -90,6 +97,7 @@ class WootITClient:
         })
         self._estudiante_activo = None
         self._user_id_activo = None
+        self._qusuario_activo = None
         self._cookies_dict = {}
 
     def login(self) -> bool:
@@ -146,10 +154,11 @@ class WootITClient:
         Cambia el estudiante activo via el endpoint confirmado del portal:
         includes/procesos.cfm?changeStudent=1&id=<userId>
 
-        Esto actualiza la sesión server-side de Lucee para que los endpoints
-        HTML (calificaciones, asistencia) devuelvan datos del estudiante correcto.
+        Esto actualiza la sesión server-side de Lucee (QUSUARIO cambia)
+        para que los endpoints HTML devuelvan datos del estudiante correcto.
         """
         user_num = ESTUDIANTES_NUM.get(nombre)
+        qusuario = ESTUDIANTES_QUSUARIO.get(nombre)
         if not user_num:
             logger.error(f"ID no encontrado para: {nombre}")
             return False
@@ -162,12 +171,24 @@ class WootITClient:
                 timeout=15,
             )
             logger.info(f"changeSon({user_num}): {resp.status_code} | url={resp.url}")
+            # Verificar que QUSUARIO cambió en las cookies de respuesta
+            nuevas_cookies = {c.name: c.value for c in resp.cookies}
+            if "QUSUARIO" in nuevas_cookies:
+                nuevo_qusuario = nuevas_cookies["QUSUARIO"]
+                logger.info(f"QUSUARIO actualizado: {nuevo_qusuario}")
+                self.session.cookies.set("QUSUARIO", nuevo_qusuario, domain="www.wootit.com")
+                # Guardar para uso en endpoints
+                self._qusuario_activo = nuevo_qusuario
+            elif qusuario:
+                self._qusuario_activo = str(qusuario)
+                logger.info(f"QUSUARIO esperado: {qusuario}")
         except Exception as e:
             logger.warning(f"changeSon error: {e}")
+            self._qusuario_activo = str(qusuario) if qusuario else None
 
         self._user_id_activo = user_num
         self._estudiante_activo = nombre
-        logger.info(f"✅ Estudiante activo: {nombre} (userId={user_num})")
+        logger.info(f"✅ Estudiante activo: {nombre} (changeSon={user_num}, QUSUARIO={self._qusuario_activo})")
         return True
 
     def cfc_get(self, cfc_path: str, method: str, params: dict = None) -> dict:
@@ -244,9 +265,9 @@ class WootITClient:
         """
         Mensajes via CFC. Endpoint confirmado del Network:
         comunicacion/cfc/mensajes.cfc
-        userId = QUSUARIO (480, el padre) — no el estudiante.
+        userId = QUSUARIO activo (cambia al seleccionar estudiante).
         """
-        qusuario = self._cookies_dict.get("QUSUARIO", "480")
+        qusuario = self._qusuario_activo or self._cookies_dict.get("QUSUARIO", "480")
         # Probar métodos en orden de probabilidad
         for method in ["getRecibidos", "getMensajes", "getAll",
                        "getMensajesRecibidos", "getTodos"]:
