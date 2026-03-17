@@ -31,7 +31,7 @@ import time
 
 import anthropic
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
-from playwright_stealth import stealth_sync
+from playwright_stealth import Stealth
 
 import config
 
@@ -90,7 +90,7 @@ def get_browser(headless=True):
     page = context.new_page()
 
     # playwright-stealth: inyecta anti-fingerprint ANTES de cualquier navegación
-    stealth_sync(page)
+    Stealth().use_sync(page)
 
     logger.info(f"Playwright + stealth iniciado (headless={headless})")
     return pw, browser, page
