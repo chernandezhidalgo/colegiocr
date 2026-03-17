@@ -32,13 +32,10 @@ jobs:
         run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal /tmp/screenshots
 
       - name: Verificar entorno
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          python -c "import os; key=os.environ.get('ANTHROPIC_API_KEY',''); print('ANTHROPIC_API_KEY:', 'OK' if key else 'VACIA')"
           python -c "import requests; print('requests', requests.__version__)"
           python -c "import anthropic; print('anthropic', anthropic.__version__)"
-          python -c "from modules.api_client import WootITClient; print('WootITClient OK')"
+          python -c "import bs4; print('beautifulsoup4 OK')"
 
       - name: Ejecutar levantamiento basal
         env:
