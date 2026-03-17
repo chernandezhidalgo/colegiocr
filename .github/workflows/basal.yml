@@ -46,8 +46,9 @@ jobs:
         run: |
           python -c "import os; key=os.environ.get('ANTHROPIC_API_KEY',''); print('ANTHROPIC_API_KEY:', 'OK' if key else 'VACIA')"
           python -c "import selenium; print('selenium', selenium.__version__)"
-          python -c "import undetected_chromedriver as uc; print('uc', uc.__version__)"
+          python -c "import setuptools; import undetected_chromedriver as uc; print('uc', uc.__version__)"
           python -c "import anthropic; print('anthropic', anthropic.__version__)"
+          google-chrome --version 2>/dev/null || google-chrome-stable --version 2>/dev/null || echo "Chrome: verificar PATH"
 
       - name: Ejecutar levantamiento basal
         env:

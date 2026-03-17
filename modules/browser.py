@@ -49,14 +49,42 @@ ESTUDIANTES_IDS = {
 _EN_CI = os.environ.get("CI", "").lower() == "true"
 
 
+def _get_chrome_major_version():
+    """Detecta la versión major de Chrome instalado. Retorna None si no encuentra."""
+    import subprocess, re
+    for cmd in [
+        ["google-chrome", "--version"],
+        ["google-chrome-stable", "--version"],
+        ["chromium", "--version"],
+        ["chromium-browser", "--version"],
+    ]:
+        try:
+            out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode()
+            m = re.search(r"(\d+)\.", out)
+            if m:
+                v = int(m.group(1))
+                logger.info(f"Chrome versión detectada: {v} (via {cmd[0]})")
+                return v
+        except Exception:
+            pass
+    return None
+
+
 def get_driver(headless=True):
     """
-    v3.9.0: undetected-chromedriver en lugar de selenium puro.
-    Parchea los fingerprints de ChromeDriver que WootIT usa para
-    detectar y bloquear bots. Drop-in replacement de webdriver.Chrome.
+    v3.9.3: uc.Chrome con version_main explícito para evitar
+    incompatibilidad ChromeDriver/Chrome.
+
+    ERROR ANTERIOR: uc descargaba ChromeDriver 146 para Chrome 145
+    porque usa la versión disponible más reciente, no la instalada.
+
+    FIX: detectar versión major de Chrome en runtime y pasarla
+    como version_main para que uc descargue el driver correcto.
     """
     if _EN_CI:
         headless = True
+
+    chrome_version = _get_chrome_major_version()
 
     opts = uc.ChromeOptions()
     opts.add_argument("--no-sandbox")
@@ -69,14 +97,19 @@ def get_driver(headless=True):
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
     )
 
-    driver = uc.Chrome(
+    kwargs = dict(
         options=opts,
         headless=headless,
-        use_subprocess=True,   # más estable en CI
+        use_subprocess=True,
         no_sandbox=True,
     )
+    if chrome_version:
+        kwargs["version_main"] = chrome_version
+        logger.info(f"Usando version_main={chrome_version} para ChromeDriver")
+
+    driver = uc.Chrome(**kwargs)
     driver.implicitly_wait(3)
-    logger.info(f"Chrome (undetected) iniciado (headless={headless})")
+    logger.info(f"Chrome (undetected v{chrome_version}) iniciado (headless={headless})")
     return driver
 
 
