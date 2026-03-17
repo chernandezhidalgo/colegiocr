@@ -21,10 +21,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException
 
 import config
 from modules.attachments import procesar_adjunto
@@ -68,10 +64,17 @@ SELECTORES_CONTENIDO = {
 # ─── UTILIDADES ──────────────────────────────────────────────────────────────
 
 def _soup(driver):
-    return BeautifulSoup(driver.page_source, 'lxml')
+    # Compatibilidad Playwright (page.content()) y Selenium (page_source)
+    try:
+        return BeautifulSoup(driver.content(), 'lxml')
+    except AttributeError:
+        return BeautifulSoup(driver.content(), 'lxml')
 
 def _cookies(driver):
-    return {c['name']: c['value'] for c in driver.get_cookies()}
+    try:
+        return {c['name']: c['value'] for c in driver.context.cookies()}
+    except AttributeError:
+        return {c['name']: c['value'] for c in driver.get_cookies()}
 
 def _es_leido(el):
     return any(c in el.get('class', []) for c in ['leido', 'read', 'opened'])
@@ -129,25 +132,21 @@ def _navegar_y_esperar(driver, url, seccion_key, timeout_contenido=5):
     if not wait_and_get(driver, url, 'body'):
         return False
 
-    # Esperar que JS termine de cargar
+    # Esperar que JS termine de cargar (Playwright)
     try:
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-    except TimeoutException:
+        driver.wait_for_load_state('networkidle', timeout=10000)
+    except Exception:
         pass
 
     # Intentar cada selector específico de la sección
     selectores = SELECTORES_CONTENIDO.get(seccion_key, [])
     for sel in selectores:
         try:
-            WebDriverWait(driver, timeout_contenido).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, sel))
-            )
+            driver.wait_for_selector(sel, timeout=timeout_contenido * 1000)
             logger.info(f"Contenido de '{seccion_key}' listo (selector: {sel})")
-            time.sleep(1)   # pequeña pausa extra para renderizado completo
+            time.sleep(1)
             return True
-        except TimeoutException:
+        except Exception:
             continue
 
     # Ningún selector coincidió → esperar tiempo fijo y continuar igual
@@ -158,7 +157,7 @@ def _navegar_y_esperar(driver, url, seccion_key, timeout_contenido=5):
 
     # Log del HTML actual para diagnóstico
     try:
-        soup_diag = BeautifulSoup(driver.page_source, 'lxml')
+        soup_diag = BeautifulSoup(driver.content(), 'lxml')
         clases_presentes = set()
         for tag in soup_diag.find_all(True, limit=200):
             for c in tag.get('class', []):

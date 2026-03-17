@@ -11,7 +11,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import config
-from modules.browser import get_driver, login, cambiar_estudiante
+from modules.browser import get_browser, login, cambiar_estudiante
 from modules.clasificador import clasificar_mensaje
 from modules.database import registrar_ejecucion, guardar_mensaje, guardar_calificacion
 from modules.mailer import enviar_correo, enviar_alerta_error
@@ -96,7 +96,7 @@ def main():
 
     # ── Iniciar navegador ─────────────────────────────────────────────────
     en_ci  = os.environ.get("CI", "").lower() == "true"
-    driver = get_driver(headless=en_ci)
+    _pw, _browser, driver = get_browser(headless=en_ci)
     adjuntos_para_correo = []
     datos_estudiantes    = []
     correo_ok            = False
@@ -176,7 +176,8 @@ def main():
     finally:
         if datos_estudiantes:
             _persistir_en_supabase(datos_estudiantes, 'noche', correo_ok)
-        driver.quit()
+        _browser.close()
+        _pw.stop()
 
 
 if __name__ == '__main__':

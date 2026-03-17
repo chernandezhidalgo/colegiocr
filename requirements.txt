@@ -1,7 +1,6 @@
 setuptools>=68.0.0
-selenium>=4.18.1
-undetected-chromedriver>=3.5.5
-chromedriver-autoinstaller>=0.6.4
+playwright>=1.43.0
+playwright-stealth>=1.0.6
 beautifulsoup4>=4.12.3
 lxml>=5.1.0
 pdfplumber>=0.10.3

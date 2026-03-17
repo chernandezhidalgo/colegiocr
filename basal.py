@@ -25,7 +25,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import config
-from modules.browser import get_driver, login, cambiar_estudiante
+from modules.browser import get_browser, login, cambiar_estudiante
 from modules.clasificador import clasificar_mensaje
 from modules.database import registrar_ejecucion, guardar_mensaje, guardar_calificacion
 from modules.mailer import enviar_correo, enviar_alerta_error
@@ -404,7 +404,7 @@ def main():
     logger.info(f"Ventana temporal: {fecha_desde} → {fecha_hasta}")
 
     en_ci  = os.environ.get("CI","").lower() == "true"
-    driver = get_driver(headless=en_ci)
+    _pw, _browser, driver = get_browser(headless=en_ci)
     datos_estudiantes = []
     correo_ok         = False
 
@@ -427,23 +427,23 @@ def main():
         _os.makedirs('/tmp/screenshots', exist_ok=True)
 
         datos1['mensajes']       = _enriquecer_mensajes(revisar_mensajes(driver, ventana_desde, basal_vacio))
-        driver.save_screenshot('/tmp/screenshots/carlos_mensajes.png')
+        driver.screenshot(path='/tmp/screenshots/carlos_mensajes.png')
 
         datos1['calificaciones'] = revisar_calificaciones(driver, basal_vacio)
-        driver.save_screenshot('/tmp/screenshots/carlos_calificaciones.png')
+        driver.screenshot(path='/tmp/screenshots/carlos_calificaciones.png')
 
         datos1['asistencia']     = revisar_asistencia(driver, basal_vacio)
-        driver.save_screenshot('/tmp/screenshots/carlos_asistencia.png')
+        driver.screenshot(path='/tmp/screenshots/carlos_asistencia.png')
 
         datos1['boleta']         = revisar_seccion_simple(driver, 'boleta',     basal_vacio, 'Lista todos los registros de conducta y boleta disponibles.')
-        driver.save_screenshot('/tmp/screenshots/carlos_boleta.png')
+        driver.screenshot(path='/tmp/screenshots/carlos_boleta.png')
 
         datos1['anotaciones']    = revisar_seccion_simple(driver, 'anotaciones', basal_vacio, 'Lista todas las anotaciones con fecha, tipo, descripcion y profesor.')
         datos1['aula_virtual']   = revisar_aula_virtual(driver, ventana_desde, basal_vacio)
-        driver.save_screenshot('/tmp/screenshots/carlos_aula_virtual.png')
+        driver.screenshot(path='/tmp/screenshots/carlos_aula_virtual.png')
 
         datos1['agenda']         = revisar_agenda(driver, basal_vacio)
-        driver.save_screenshot('/tmp/screenshots/carlos_agenda.png')
+        driver.screenshot(path='/tmp/screenshots/carlos_agenda.png')
         datos_estudiantes.append(datos1)
 
         # Guardar basal de Carlos
@@ -475,17 +475,17 @@ def main():
                 'grado':        config.HIJO2_GRADO,
             }
             datos2['mensajes']       = _enriquecer_mensajes(revisar_mensajes(driver, ventana_desde, basal_vacio))
-            driver.save_screenshot('/tmp/screenshots/starling_mensajes.png')
+            driver.screenshot(path='/tmp/screenshots/starling_mensajes.png')
             datos2['calificaciones'] = revisar_calificaciones(driver, basal_vacio)
-            driver.save_screenshot('/tmp/screenshots/starling_calificaciones.png')
+            driver.screenshot(path='/tmp/screenshots/starling_calificaciones.png')
             datos2['asistencia']     = revisar_asistencia(driver, basal_vacio)
-            driver.save_screenshot('/tmp/screenshots/starling_asistencia.png')
+            driver.screenshot(path='/tmp/screenshots/starling_asistencia.png')
             datos2['boleta']         = revisar_seccion_simple(driver, 'boleta',      basal_vacio, 'Lista todos los registros de conducta.')
             datos2['anotaciones']    = revisar_seccion_simple(driver, 'anotaciones',  basal_vacio, 'Lista todas las anotaciones.')
             datos2['aula_virtual']   = revisar_aula_virtual(driver, ventana_desde, basal_vacio)
-            driver.save_screenshot('/tmp/screenshots/starling_aula_virtual.png')
+            driver.screenshot(path='/tmp/screenshots/starling_aula_virtual.png')
             datos2['agenda']         = revisar_agenda(driver, basal_vacio)
-            driver.save_screenshot('/tmp/screenshots/starling_agenda.png')
+            driver.screenshot(path='/tmp/screenshots/starling_agenda.png')
             datos_estudiantes.append(datos2)
 
             guardar_basal('andres', {
@@ -515,7 +515,8 @@ def main():
     finally:
         if datos_estudiantes:
             _persistir_basal(datos_estudiantes)
-        driver.quit()
+        _browser.close()
+        _pw.stop()
         logger.info("Levantamiento basal completado.")
 
 

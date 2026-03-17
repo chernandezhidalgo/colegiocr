@@ -18,15 +18,6 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Verificar Chrome disponible
-        run: |
-          echo "=== Chrome en el sistema ==="
-          google-chrome --version || google-chrome-stable --version || chromium --version || echo "Chrome no encontrado en PATH"
-          which google-chrome || which google-chrome-stable || which chromium || true
-          echo "=== Todos los binarios chrome* ==="
-          ls /usr/bin/google-chrome* /usr/bin/chromium* 2>/dev/null || true
-          ls /opt/google/chrome/ 2>/dev/null || true
-
       - name: Instalar dependencias del sistema
         run: |
           sudo apt-get update -q
@@ -37,18 +28,20 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Instalar Playwright Chromium
+        run: playwright install chromium --with-deps
+
       - name: Crear directorios
         run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal /tmp/screenshots
 
-      - name: Verificar imports Python
+      - name: Verificar entorno
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           python -c "import os; key=os.environ.get('ANTHROPIC_API_KEY',''); print('ANTHROPIC_API_KEY:', 'OK' if key else 'VACIA')"
-          python -c "import selenium; print('selenium', selenium.__version__)"
-          python -c "import setuptools; import undetected_chromedriver as uc; print('uc', uc.__version__)"
+          python -c "from playwright.sync_api import sync_playwright; print('playwright OK')"
+          python -c "import playwright_stealth; print('playwright-stealth OK')"
           python -c "import anthropic; print('anthropic', anthropic.__version__)"
-          google-chrome --version 2>/dev/null || google-chrome-stable --version 2>/dev/null || echo "Chrome: verificar PATH"
 
       - name: Ejecutar levantamiento basal
         env:

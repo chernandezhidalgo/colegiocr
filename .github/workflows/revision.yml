@@ -30,6 +30,9 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Instalar Playwright Chromium
+        run: playwright install chromium --with-deps
+
       - name: Crear directorios
         run: mkdir -p /tmp/logs /tmp/adjuntos /tmp/basal /tmp/screenshots
 
