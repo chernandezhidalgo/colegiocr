@@ -259,52 +259,105 @@ class WootITClient:
         logger.warning("mensajes.cfc: ningún método devolvió datos")
         return {}
 
-    def get_calificaciones_json(self) -> dict:
+    def get_cursos_estudiante(self) -> list:
         """
-        Calificaciones via CFC.
-        DESCUBIERTO: estudianteDetalles.cfm?idCurso=739&idEst=240
-        → parámetro clave es idEst (no userId/idUsuario)
-        → idCurso identifica el curso específico
+        Obtiene lista de cursos del estudiante.
+        Paso 1 del flujo de calificaciones: estudiante.cfm carga los cursos,
+        luego estudianteDetalles.cfm?idCurso=X&idEst=Y carga notas de cada curso.
         """
         user = self._user_id_activo or 213
-        paths = [
-            "calificaciones/cfc/calificaciones.cfc",
-            "calificaciones/cfc/notas.cfc",
-            "calificaciones/cfc/estudiante.cfc",
-            "calificaciones/cfc/calificacion.cfc",
-        ]
-        methods = ["getCalificaciones", "getNotas", "getEstudiante",
-                   "getAll", "get", "getCalificacionesEstudiante",
-                   "getNota", "getResumen", "getCalificacion",
-                   "getDetalles", "getByEstudiante"]
-        # Parámetros con los nombres correctos descubiertos en URL
+        cfc = "calificaciones/cfc/calificaciones.cfc"
+        for method in ["getCursos", "getMaterias", "getCursosEstudiante",
+                       "getEstudiante", "getCursosAlumno", "getAll"]:
+            for params in [{"idEst": user}, {"userId": user}, {"idUsuario": user}]:
+                try:
+                    r = self.session.get(f"{BASE}/{cfc}",
+                        params={"method": method, "returnformat": "json", **params},
+                        timeout=10)
+                    if r.status_code == 200 and "COLUMNS" in r.text[:200]:
+                        data = r.json()
+                        rows = WootITClient.query_to_dicts_static(data)
+                        if rows:
+                            logger.info(f"✅ getCursos/{method}: {len(rows)} cursos | "
+                                        f"cols={list(rows[0].keys())[:6]}")
+                            return rows
+                except Exception:
+                    pass
+        return []
+
+    def get_calificaciones_curso(self, id_curso: int) -> list:
+        """
+        Obtiene calificaciones de un curso específico.
+        Paso 2: estudianteDetalles.cfm?idCurso=X&idEst=Y
+        """
+        user = self._user_id_activo or 213
+        cfc = "calificaciones/cfc/calificaciones.cfc"
+        for method in ["getCalificaciones", "getNotas", "getDetalles",
+                       "getCalificacionesEstudiante", "getNota", "getAll"]:
+            try:
+                r = self.session.get(f"{BASE}/{cfc}",
+                    params={"method": method, "returnformat": "json",
+                            "idCurso": id_curso, "idEst": user},
+                    timeout=10)
+                if r.status_code == 200 and "COLUMNS" in r.text[:200]:
+                    data = r.json()
+                    rows = WootITClient.query_to_dicts_static(data)
+                    if rows:
+                        logger.info(f"✅ getCalificaciones curso {id_curso}/{method}: "
+                                    f"{len(rows)} filas")
+                        return rows
+            except Exception:
+                pass
+        return []
+
+    def get_calificaciones_json(self) -> dict:
+        """
+        Calificaciones via CFC — flujo de 2 pasos descubierto:
+        1. estudianteDetalles.cfm?idCurso=739&idEst=240
+           → parámetros: idEst (estudiante), idCurso (curso)
+        2. Primero obtenemos la lista de cursos, luego las notas de cada uno.
+        """
+        user = self._user_id_activo or 213
+        cfc = "calificaciones/cfc/calificaciones.cfc"
+
+        # Intentar endpoint directo primero (más simple)
+        methods_directos = ["getCalificaciones", "getNotas", "getEstudiante",
+                            "getResumen", "getAll", "getCursos"]
         param_sets = [
-            {"idEst": user, "returnformat": "json"},
-            {"idEst": user, "userId": user, "returnformat": "json"},
-            {"idUsuario": user, "idEst": user, "returnformat": "json"},
-            {"userId": user, "returnformat": "json"},
+            {"idEst": user},
+            {"idEst": user, "userId": user},
+            {"userId": user},
+            {"idUsuario": user},
         ]
-        for path in paths:
-            for method in methods:
-                for params in param_sets:
-                    try:
-                        p = {"method": method, **params}
-                        r = self.session.get(f"{BASE}/{path}", params=p, timeout=10)
-                        if r.status_code == 200:
-                            text = r.text.strip()
-                            if "COLUMNS" in text[:200]:
-                                data = r.json()
-                                rows = data.get("DATA", [])
-                                if rows:
-                                    logger.info(f"✅ CALIFICACIONES {path}/{method}: "
-                                                f"{len(rows)} filas | cols={data.get('COLUMNS',[])[:6]}")
-                                    return data
-                            elif text and text not in ("null","","{}","[]"):
-                                logger.info(f"   cal {path}/{method}/{list(params.keys())}: {text[:80]}")
-                    except Exception:
-                        pass
+        for method in methods_directos:
+            for params in param_sets:
+                try:
+                    r = self.session.get(f"{BASE}/{cfc}",
+                        params={"method": method, "returnformat": "json", **params},
+                        timeout=10)
+                    if r.status_code == 200:
+                        text = r.text.strip()
+                        if "COLUMNS" in text[:200]:
+                            data = r.json()
+                            if data.get("DATA"):
+                                logger.info(f"✅ CALIFICACIONES directo {method}/"
+                                            f"{list(params.keys())}: {len(data['DATA'])} filas")
+                                return data
+                        elif text not in ("null","","{}","[]","false"):
+                            logger.info(f"   cal {method}/{list(params.keys())}: {text[:100]}")
+                except Exception:
+                    pass
+
         logger.warning("calificaciones CFC: ningún endpoint respondió con datos")
         return {}
+
+    @staticmethod
+    def query_to_dicts_static(data) -> list:
+        """Versión estática de query_to_dicts para uso en métodos de instancia."""
+        if not isinstance(data, dict):
+            return []
+        columns = [c.upper() for c in data.get("COLUMNS", [])]
+        return [dict(zip(columns, row)) for row in data.get("DATA", [])]
 
     def get_asistencia_json(self) -> dict:
         """
