@@ -127,15 +127,27 @@ class WootITClient:
 
     def cambiar_estudiante(self, nombre: str) -> bool:
         """
-        Establece el userId del estudiante activo.
-        WootIT usa userId como parámetro en los CFCs — no hay endpoint
-        de "cambio de sesión" server-side. El userId se pasa directamente
-        en cada llamada CFC como parámetro.
+        Cambia el estudiante activo via el endpoint confirmado del portal:
+        includes/procesos.cfm?changeStudent=1&id=<userId>
+
+        Esto actualiza la sesión server-side de Lucee para que los endpoints
+        HTML (calificaciones, asistencia) devuelvan datos del estudiante correcto.
         """
         user_num = ESTUDIANTES_NUM.get(nombre)
         if not user_num:
             logger.error(f"ID no encontrado para: {nombre}")
             return False
+
+        try:
+            resp = self.session.get(
+                f"{BASE}/includes/procesos.cfm",
+                params={"changeStudent": 1, "id": user_num},
+                allow_redirects=True,
+                timeout=15,
+            )
+            logger.info(f"changeSon({user_num}): {resp.status_code} | url={resp.url}")
+        except Exception as e:
+            logger.warning(f"changeSon error: {e}")
 
         self._user_id_activo = user_num
         self._estudiante_activo = nombre
