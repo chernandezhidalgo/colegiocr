@@ -277,58 +277,80 @@ def _procesar_calificaciones_json(rows: list, basal_notas: dict) -> list:
 
 def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> list:
     """
-    ESTRUCTURA CONFIRMADA via DevTools (imagen 3):
-    Las notas están en aria-valuenow de .progress-bar dentro de .progress.
-    Ejemplo: progress-bar | 100.00 | aria-valuenow=100
-             progress-bar | 60.00  | aria-valuenow=60
-             progress-bar | 75.83  | aria-valuenow=75.83
-
-    Estructura HTML probable:
-    <div class="...">
-      <span>Nombre Materia</span>
-      <div class="progress">
-        <div class="progress-bar" aria-valuenow="75.83">75.83</div>
-      </div>
-    </div>
+    ESTRUCTURA CONFIRMADA via DevTools:
+    - Cada materia vive en un bloque col-xs-12 col-md-4
+    - Cada bloque tiene MÚLTIPLES .progress-bar (cotidianos, quizzes, promedio)
+    - El nombre de materia está en un elemento de texto dentro del bloque
+    - La primera progress-bar del bloque es el promedio de cotidianos (100)
+    - Las siguientes son componentes adicionales (60 = quiz, 75.83 = promedio general?)
+    - Usamos la ÚLTIMA progress-bar del bloque como promedio final,
+      o la de mayor valor si todas son sub-notas
+    
+    Resultado confirmado:
+      Agroecología → 100 (1er componente)
+      Agroecología → 60  (2do componente)  
+      Agroecología → 75.83 (3er — promedio general)
     """
     notas = []
 
-    # Estrategia principal: progress-bar con aria-valuenow (CONFIRMADO)
-    for barra in soup.select(".progress-bar"):
-        nota = barra.get("aria-valuenow") or barra.get_text(strip=True)
-        if not nota:
+    # Buscar bloques de materia por clase col-md-4 (confirmado en DevTools)
+    bloques = soup.select(".col-md-4, .col-xs-12.col-md-4, .col-sm-4")
+    
+    if not bloques:
+        # Fallback: buscar el contenedor .calificaciones y sus hijos directos
+        cal = soup.select_one(".calificaciones")
+        if cal:
+            bloques = [c for c in cal.children if hasattr(c, 'select')]
+
+    for bloque in bloques:
+        if not hasattr(bloque, 'select'):
             continue
-        try:
-            float(nota)  # verificar que es número válido
-        except (ValueError, TypeError):
+        barras = bloque.select(".progress-bar")
+        if not barras:
             continue
 
-        # Buscar nombre de materia subiendo en el DOM
+        # Obtener nombre de materia — texto del bloque que no sea numérico
         nombre = ""
-        el = barra.parent  # .progress
-        for _ in range(6):
-            if el is None:
+        for child in bloque.children:
+            if not hasattr(child, 'get_text'):
+                continue
+            # Excluir divs con barras de progreso
+            if child.select(".progress-bar"):
+                continue
+            txt = child.get_text(strip=True)
+            if txt and len(txt) > 2 and not re.match(r'^[0-9. ]+$', txt):
+                nombre = txt[:80]
                 break
-            # Buscar texto directo (no de hijos con progress-bar)
-            for child in el.children:
-                if hasattr(child, 'get_text'):
-                    # Excluir si contiene progress-bar
-                    if not child.select(".progress-bar") if hasattr(child, 'select') else True:
-                        txt = child.get_text(strip=True)
-                        if txt and len(txt) > 2 and not re.match(r'^[0-9.]+$', txt):
-                            nombre = txt[:80]
-                            break
-                elif hasattr(child, 'strip') and child.strip():
-                    txt = child.strip()
-                    if len(txt) > 2 and not re.match(r'^[0-9.]+$', txt):
-                        nombre = txt[:80]
-                        break
-            if nombre:
-                break
-            el = el.parent
+        
+        if not nombre:
+            continue
 
-        if nombre and nota:
-            _agregar_nota(notas, nombre, str(nota), basal_notas)
+        # Recoger todos los valores de las barras
+        valores = []
+        for barra in barras:
+            v = barra.get("aria-valuenow") or barra.get_text(strip=True)
+            try:
+                valores.append(float(str(v).replace(",", ".")))
+            except (ValueError, TypeError):
+                pass
+
+        if not valores:
+            continue
+
+        # La última barra suele ser el promedio general
+        # Si hay solo 1, esa es la nota
+        # Si hay varias, tomamos la última (orden lógico: cotidianos → quizzes → promedio)
+        nota_final = valores[-1]
+        
+        # Pero si la última es menor que las anteriores y hay exactamente 3 barras
+        # (cotidiano, quiz, promedio), la última ES el promedio general
+        # Si hay solo 1 barra, es la nota directa
+        
+        _agregar_nota(notas, nombre, str(nota_final), basal_notas)
+        
+        # También loguear desglose para diagnóstico
+        if len(valores) > 1:
+            logger.debug(f"  {nombre}: componentes={valores} → promedio={nota_final}")
 
     # Fallback: tablas
     if not notas:
@@ -340,7 +362,8 @@ def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> lis
                 if materia and nota and len(materia) > 1:
                     _agregar_nota(notas, materia, nota, basal_notas)
 
-    logger.info(f"Calificaciones HTML: {len(notas)} materias")
+    logger.info(f"Calificaciones HTML: {len(notas)} materias | "
+                f"bloques analizados: {len(bloques)}")
     return notas
 
 
