@@ -277,82 +277,96 @@ def _procesar_calificaciones_json(rows: list, basal_notas: dict) -> list:
 
 def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> list:
     """
-    ESTRUCTURA CONFIRMADA via DevTools:
-    - Cada materia vive en un bloque col-xs-12 col-md-4
-    - Cada bloque tiene MÚLTIPLES .progress-bar (cotidianos, quizzes, promedio)
-    - El nombre de materia está en un elemento de texto dentro del bloque
-    - La primera progress-bar del bloque es el promedio de cotidianos (100)
-    - Las siguientes son componentes adicionales (60 = quiz, 75.83 = promedio general?)
-    - Usamos la ÚLTIMA progress-bar del bloque como promedio final,
-      o la de mayor valor si todas son sub-notas
-    
-    Resultado confirmado:
-      Agroecología → 100 (1er componente)
-      Agroecología → 60  (2do componente)  
-      Agroecología → 75.83 (3er — promedio general)
+    ESTRUCTURA DEFINITIVA CONFIRMADA via DevTools + PDF:
+
+    Un col-md-4 por TRIMESTRE. Dentro: todas las materias.
+    Consola: "Trimestre → 100, 60, 60, 60, 75.83"
+    PDF confirma: Conducta=100, Español=60, EE.SS.=60,
+                  Habilidades para la Vida=60, Progrentis=75.83
+    Las demás materias no tienen barra (sin nota aún).
+
+    Cada materia dentro del bloque tiene:
+      - texto con el nombre
+      - 0 o 1 .progress con .progress-bar[aria-valuenow]
     """
     notas = []
 
-    # Buscar bloques de materia por clase col-md-4 (confirmado en DevTools)
-    bloques = soup.select(".col-md-4, .col-xs-12.col-md-4, .col-sm-4")
-    
+    # Tomar el bloque del I Trimestre (primera col-md-4)
+    bloques = soup.select(".col-md-4")
     if not bloques:
-        # Fallback: buscar el contenedor .calificaciones y sus hijos directos
-        cal = soup.select_one(".calificaciones")
-        if cal:
-            bloques = [c for c in cal.children if hasattr(c, 'select')]
+        bloques = soup.select(".col-sm-4, .col-lg-4")
 
-    for bloque in bloques:
-        if not hasattr(bloque, 'select'):
-            continue
-        barras = bloque.select(".progress-bar")
-        if not barras:
-            continue
+    bloque = bloques[0] if bloques else None
+    if not bloque:
+        logger.warning("Calificaciones: no se encontró bloque col-md-4")
+        return notas
 
-        # Obtener nombre de materia — texto del bloque que no sea numérico
-        nombre = ""
-        for child in bloque.children:
-            if not hasattr(child, 'get_text'):
-                continue
-            # Excluir divs con barras de progreso
-            if child.select(".progress-bar"):
-                continue
-            txt = child.get_text(strip=True)
-            if txt and len(txt) > 2 and not re.match(r'^[0-9. ]+$', txt):
-                nombre = txt[:80]
-                break
+    # Dentro del bloque, cada materia es un div/elemento que puede tener
+    # texto de nombre y opcionalmente una .progress con barra
+    # Recorrer hijos directos del bloque
+    hijos = [h for h in bloque.children if hasattr(h, 'get_text')]
+    
+    nombre_actual = ""
+    for hijo in hijos:
+        barra = hijo.select_one(".progress-bar") if hasattr(hijo, 'select_one') else None
+        texto_hijo = hijo.get_text(strip=True)
         
-        if not nombre:
-            continue
+        if barra:
+            nota = barra.get("aria-valuenow") or barra.get_text(strip=True)
+            # El nombre ya debería estar en nombre_actual o en texto antes de la barra
+            if not nombre_actual:
+                # Intentar extraer del mismo elemento
+                for child in hijo.children:
+                    if hasattr(child, 'select') and child.select(".progress"):
+                        continue
+                    txt = child.get_text(strip=True) if hasattr(child, 'get_text') else ""
+                    if txt and len(txt) > 2 and not re.match(r"^[0-9. ]+$", txt):
+                        nombre_actual = txt[:80]
+                        break
+            if nombre_actual and nota:
+                try:
+                    float(str(nota))
+                    _agregar_nota(notas, nombre_actual, str(nota), basal_notas)
+                    logger.debug(f"  ✓ {nombre_actual} = {nota}")
+                except (ValueError, TypeError):
+                    pass
+            nombre_actual = ""
+        elif texto_hijo and len(texto_hijo) > 2 and not re.match(r"^[0-9. ]+$", texto_hijo):
+            # Es un nombre de materia sin barra (sin nota aún)
+            nombre_actual = texto_hijo[:80]
+        else:
+            nombre_actual = ""
 
-        # Recoger todos los valores de las barras
-        valores = []
-        for barra in barras:
-            v = barra.get("aria-valuenow") or barra.get_text(strip=True)
+    # Si no encontró nada con hijos directos, probar subcontenedores
+    if not notas:
+        for barra in bloque.select(".progress-bar"):
+            nota = barra.get("aria-valuenow") or barra.get_text(strip=True)
+            if not nota:
+                continue
             try:
-                valores.append(float(str(v).replace(",", ".")))
+                float(str(nota))
             except (ValueError, TypeError):
-                pass
+                continue
+            # Subir hasta encontrar nombre
+            el = barra.parent
+            nombre = ""
+            for _ in range(5):
+                if not el:
+                    break
+                for child in el.children:
+                    if hasattr(child, 'select') and child.select(".progress"):
+                        continue
+                    txt = child.get_text(strip=True) if hasattr(child, 'get_text') else str(child).strip()
+                    if txt and len(txt) > 2 and not re.match(r"^[0-9. ]+$", txt):
+                        nombre = txt[:80]
+                        break
+                if nombre:
+                    break
+                el = el.parent
+            if nombre:
+                _agregar_nota(notas, nombre, str(nota), basal_notas)
 
-        if not valores:
-            continue
-
-        # La última barra suele ser el promedio general
-        # Si hay solo 1, esa es la nota
-        # Si hay varias, tomamos la última (orden lógico: cotidianos → quizzes → promedio)
-        nota_final = valores[-1]
-        
-        # Pero si la última es menor que las anteriores y hay exactamente 3 barras
-        # (cotidiano, quiz, promedio), la última ES el promedio general
-        # Si hay solo 1 barra, es la nota directa
-        
-        _agregar_nota(notas, nombre, str(nota_final), basal_notas)
-        
-        # También loguear desglose para diagnóstico
-        if len(valores) > 1:
-            logger.debug(f"  {nombre}: componentes={valores} → promedio={nota_final}")
-
-    # Fallback: tablas
+    # Fallback tablas
     if not notas:
         for fila in soup.select("table tr")[1:]:
             celdas = fila.select("td")
@@ -362,10 +376,8 @@ def _procesar_calificaciones_html(soup: BeautifulSoup, basal_notas: dict) -> lis
                 if materia and nota and len(materia) > 1:
                     _agregar_nota(notas, materia, nota, basal_notas)
 
-    logger.info(f"Calificaciones HTML: {len(notas)} materias | "
-                f"bloques analizados: {len(bloques)}")
+    logger.info(f"Calificaciones: {len(notas)} con nota (de {len(bloques)} bloques trimestre)")
     return notas
-
 
 def _agregar_nota(notas: list, materia: str, nota: str, basal_notas: dict):
     """Helper para agregar nota a la lista evitando duplicados."""
