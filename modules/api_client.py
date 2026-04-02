@@ -1,5 +1,5 @@
 """
-api_client.py v3.0.0 — Cliente HTTP WootIT con cookies + diagnóstico completo.
+api_client.py v3.1.0 — Cliente HTTP WootIT con cookies + diagnóstico completo.
 
 v3.0.0 cambios:
   - Diagnóstico HTML de calificaciones/asistencia/mensajes para ver estructura real
@@ -268,33 +268,53 @@ class WootITClient:
 
     def get_mensajes_json(self) -> dict:
         """
-        Mensajes via CFC. Endpoint confirmado del Network:
-        comunicacion/cfc/mensajes.cfc
-        userId = QUSUARIO activo (cambia al seleccionar estudiante).
+        Mensajes via CFC. Endpoint: comunicacion/cfc/mensajes.cfc
+        FIX v3.1.0: prueba tanto QUSUARIO (padre) como user_id (estudiante)
+        + más métodos CFC y nombres de parámetros alternativos.
         """
         qusuario = self._qusuario_activo or self._cookies_dict.get("QUSUARIO", "480")
-        # Probar métodos en orden de probabilidad
-        for method in ["getRecibidos", "getMensajes", "getAll",
-                       "getMensajesRecibidos", "getTodos"]:
-            try:
-                r = self.session.get(
-                    f"{BASE}/comunicacion/cfc/mensajes.cfc",
-                    params={"method": method, "returnformat": "json",
-                            "userId": qusuario},
-                    timeout=20,
-                )
-                if r.status_code == 200:
-                    data = r.json()
-                    if isinstance(data, dict) and "COLUMNS" in data:
-                        logger.info(f"✅ mensajes.cfc/{method}: {len(data.get('DATA',[]))} filas")
-                        return data
-                    elif isinstance(data, list) and data:
-                        logger.info(f"✅ mensajes.cfc/{method} (list): {len(data)} items")
-                        return {"COLUMNS": list(data[0].keys()) if data else [],
-                                "DATA": [[v for v in row.values()] for row in data]}
-            except Exception as e:
-                logger.debug(f"mensajes.cfc/{method}: {e}")
-        logger.warning("mensajes.cfc: ningún método devolvió datos")
+        user_id = str(self._user_id_activo or 213)
+
+        # Deduplicar en caso de que coincidan
+        ids_a_probar = list(dict.fromkeys([qusuario, user_id]))
+
+        methods = [
+            "getRecibidos", "getMensajes", "getAll",
+            "getMensajesRecibidos", "getTodos", "getInbox",
+            "getMensajesPadre", "getByUser",
+        ]
+        param_keys = ["userId", "idUsuario", "idUser", "idPadre"]
+
+        for method in methods:
+            for uid in ids_a_probar:
+                for pk in param_keys:
+                    try:
+                        r = self.session.get(
+                            f"{BASE}/comunicacion/cfc/mensajes.cfc",
+                            params={"method": method, "returnformat": "json", pk: uid},
+                            timeout=20,
+                        )
+                        if r.status_code != 200:
+                            continue
+                        text = r.text.strip()
+                        if not text or text in ("null", "{}", "[]", "false"):
+                            continue
+                        data = r.json()
+                        if isinstance(data, dict) and "COLUMNS" in data:
+                            rows = data.get("DATA", [])
+                            logger.info(f"✅ mensajes.cfc/{method} {pk}={uid}: {len(rows)} filas")
+                            if rows:
+                                return data
+                        elif isinstance(data, list) and data:
+                            logger.info(f"✅ mensajes.cfc/{method} {pk}={uid} (list): {len(data)} items")
+                            return {
+                                "COLUMNS": list(data[0].keys()) if data else [],
+                                "DATA": [[v for v in row.values()] for row in data],
+                            }
+                    except Exception as e:
+                        logger.debug(f"mensajes.cfc/{method} {pk}={uid}: {e}")
+
+        logger.warning("mensajes.cfc: ningún método/parámetro devolvió datos — revisar logs DEBUG")
         return {}
 
     def get_cursos_estudiante(self) -> list:
@@ -584,19 +604,32 @@ class WootITClient:
     def get_mensajes_rest(self) -> list:
         """
         Prueba endpoints REST en backend.wootit.com/v1/ para mensajes.
+        FIX v3.1.0: incluye user_id del estudiante + más endpoints.
         """
-        qusuario = self._cookies_dict.get("QUSUARIO", "480")
+        qusuario = self._qusuario_activo or self._cookies_dict.get("QUSUARIO", "480")
+        user_id = str(self._user_id_activo or 213)
         endpoints = [
             "/v1/messages",
             f"/v1/messages/{qusuario}",
+            f"/v1/messages/{user_id}",
             "/v1/mensajes",
             f"/v1/mensajes/{qusuario}",
+            f"/v1/mensajes/{user_id}",
             "/v1/inbox",
+            f"/v1/inbox/{qusuario}",
+            "/v1/comunicacion/mensajes",
         ]
         for ep in endpoints:
             try:
-                r = self.session.get(f"{BACKEND}{ep}", timeout=10)
+                r = self.session.get(
+                    f"{BACKEND}{ep}",
+                    params={"userId": qusuario, "idEst": user_id},
+                    timeout=10,
+                )
                 if r.status_code == 200:
+                    text = r.text.strip()
+                    if not text or text in ("null", "{}", "[]"):
+                        continue
                     data = r.json()
                     if data and data != [] and data != {}:
                         logger.info(f"✅ REST mensajes {ep}: {str(data)[:150]}")
