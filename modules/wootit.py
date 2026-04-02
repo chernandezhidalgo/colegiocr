@@ -1,5 +1,5 @@
 """
-wootit.py v5.1.0 — Extracción datos WootIT vía API HTTP + diagnóstico HTML.
+wootit.py v5.2.0 — Extracción datos WootIT vía API HTTP + diagnóstico HTML.
 
 Cambios v5.1.0:
   - Intenta calificaciones via CFC antes de HTML scraping
@@ -156,44 +156,99 @@ def guardar_basal(key: str, datos: dict):
 # ── MENSAJES ──────────────────────────────────────────────────────────────────
 
 def revisar_mensajes(driver: WootITClient, ventana_desde, basal: dict) -> list:
+    logger.info(
+        f"=== MENSAJES: estudiante={driver._estudiante_activo} "
+        f"QUSUARIO={driver._qusuario_activo} userId={driver._user_id_activo} ==="
+    )
+
     # Intentar via REST backend.wootit.com/v1/
     rows_rest = driver.get_mensajes_rest()
+    logger.info(f"REST mensajes: {len(rows_rest)} items")
     if rows_rest:
-        logger.info(f"Mensajes REST: {len(rows_rest)}")
         return _procesar_mensajes_json(rows_rest, ventana_desde)
 
     # Intentar via CFC JSON
     r = driver.get_mensajes_json()
+    logger.info(f"CFC mensajes raw keys: {list(r.keys()) if r else 'VACÍO'}")
+    if r:
+        cols = r.get("COLUMNS", [])
+        data = r.get("DATA", [])
+        logger.info(f"CFC mensajes: cols={cols}, filas={len(data)}")
+        if data:
+            logger.info(f"  Primera fila: {dict(zip(cols, data[0]))}")
     rows = WootITClient.query_to_dicts(r)
+    logger.info(f"CFC mensajes procesados: {len(rows)} registros")
     if rows:
         return _procesar_mensajes_json(rows, ventana_desde)
 
     # Fallback HTML
     soup = driver.get_mensajes_html()
+    html_len = len(str(soup))
+    logger.info(f"HTML mensajes: {html_len} chars")
+    if html_len > 500:
+        tablas = soup.find_all("table")
+        logger.info(f"  HTML tablas encontradas: {len(tablas)}")
+        for i, t in enumerate(tablas[:3]):
+            filas = t.find_all("tr")
+            primer_txt = filas[0].get_text()[:80] if filas else ""
+            logger.info(f"  Tabla[{i}]: {len(filas)} filas | primera: {primer_txt}")
+    else:
+        logger.warning("  HTML mensajes llegó vacío o demasiado pequeño (<500 chars)")
+
     return _procesar_mensajes_html(soup, ventana_desde)
 
 
 def _procesar_mensajes_json(rows: list, ventana_desde) -> list:
+    if rows:
+        logger.info(f"_procesar_mensajes_json: {len(rows)} filas | cols: {list(rows[0].keys())[:10]}")
+
     resultados = []
     for row in rows:
-        asunto    = row.get("ASUNTO") or row.get("TITULO") or "Sin asunto"
-        remitente = row.get("REMITENTE") or row.get("FROM") or "Desconocido"
-        fecha     = _fecha_legible(row.get("FECHA") or row.get("FECHAENVIO"))
-        leido     = row.get("LEIDO") or row.get("READ") or False
-        tc        = asunto.lower()
+        asunto = (row.get("ASUNTO") or row.get("TITULO") or
+                  row.get("SUBJECT") or "Sin asunto")
+        remitente = (row.get("REMITENTE") or row.get("FROM") or
+                     row.get("NOMBREREMITENTE") or row.get("SENDER") or "Desconocido")
+        fecha_raw = (row.get("FECHA") or row.get("FECHAENVIO") or
+                     row.get("FECHACREACION") or row.get("DATE") or "")
+        fecha = _fecha_legible(fecha_raw)
+        leido = row.get("LEIDO") or row.get("READ") or row.get("ISREAD") or False
+        cuerpo = str(row.get("CUERPO") or row.get("MENSAJE") or row.get("BODY") or "")[:500]
+
+        # Filtro de ventana temporal: excluir mensajes anteriores al periodo
+        if ventana_desde and fecha_raw:
+            try:
+                desde_date = ventana_desde.date() if hasattr(ventana_desde, "date") else ventana_desde
+                diff_dias = (date.today() - desde_date).days
+                dias = _dias_hasta(fecha_raw)
+                if dias < -(diff_dias + 1):
+                    logger.debug(f"Mensaje fuera de ventana: '{asunto}' ({dias} días)")
+                    continue
+            except Exception:
+                pass
+
+        tc = asunto.lower()
         urg = "Baja"
         for p in ["urgente", "pago", "suspension", "reunion", "evaluacion"]:
             if p in tc:
-                urg = "Alta"; break
+                urg = "Alta"
+                break
         if urg == "Baja":
-            for p in ["examen", "tarea", "aviso"]:
+            for p in ["examen", "tarea", "aviso", "circular"]:
                 if p in tc:
-                    urg = "Media"; break
+                    urg = "Media"
+                    break
+
         resultados.append({
-            "asunto": asunto, "remitente": remitente, "fecha": fecha,
-            "cuerpo": "", "adjuntos": [], "urgencia": urg,
-            "razon_urgencia": "JSON", "estado": "[YA LEIDO]" if leido else "[NUEVO]",
+            "asunto": asunto,
+            "remitente": remitente,
+            "fecha": fecha,
+            "cuerpo": cuerpo,
+            "adjuntos": [],
+            "urgencia": urg,
+            "razon_urgencia": "JSON",
+            "estado": "[YA LEIDO]" if leido else "[NUEVO]",
         })
+
     logger.info(f"Mensajes JSON extraídos: {len(resultados)}")
     return resultados
 
