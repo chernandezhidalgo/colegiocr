@@ -87,7 +87,7 @@ class WootITClient:
             ),
             "Accept":            "*/*",
             "Accept-Language":   "es-CR,es-ES;q=0.9,es;q=0.8",
-            "Accept-Encoding":   "gzip, deflate, br, zstd",
+            "Accept-Encoding":   "gzip, deflate",
             "X-Requested-With":  "XMLHttpRequest",
             "Origin":            "https://www.wootit.com",
             "Referer":           f"{BASE}/home/",
@@ -117,7 +117,8 @@ class WootITClient:
         logger.info(f"🍪 Cookies cargadas: {list(self._cookies_dict.keys())}")
 
         # Decodificar JWT para ver qué usuario/estudiante tiene la sesión
-        jwt = self._cookies_dict.get("WOOTITAPITOKEN", "")
+        tenant = BASE.split('/')[-1] if '/' in BASE else 'adventistacademy'
+        jwt = self._cookies_dict.get("WOOTITAPITOKEN", "") or self._cookies_dict.get(f"WOOTITAPITOKEN_{tenant}", "")
         if jwt:
             payload = _decodificar_jwt(jwt)
             logger.info(f"🔑 JWT payload: {payload}")
@@ -200,7 +201,7 @@ class WootITClient:
         url = f"{BASE}/{cfc_path}"
         p = {"method": method, "returnformat": "json"}
         if self._user_id_activo:
-            p["idUsuario"] = self._user_id_activo
+            p["idUsuario"] = self._qusuario_activo or self._user_id_activo
             p["userId"]    = self._user_id_activo
         if params:
             p.update(params)
@@ -212,7 +213,7 @@ class WootITClient:
         url = f"{BASE}/{cfc_path}"
         d = {"method": method, "returnformat": "json"}
         if self._user_id_activo:
-            d["idUsuario"] = self._user_id_activo
+            d["idUsuario"] = self._qusuario_activo or self._user_id_activo
             d["userId"]    = self._user_id_activo
         if data:
             d.update(data)
@@ -224,7 +225,7 @@ class WootITClient:
         url = f"{BASE}/{path}"
         p = params or {}
         if self._user_id_activo:
-            p = {**p, "idUsuario": self._user_id_activo}
+            p = {**p, "idUsuario": self._qusuario_activo or self._user_id_activo}
         resp = self.session.get(url, params=p if p else None, timeout=20)
         resp.raise_for_status()
         return BeautifulSoup(resp.text, "lxml")

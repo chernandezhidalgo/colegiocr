@@ -9,17 +9,24 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from supabase import create_client, Client
+try:
+    from supabase import create_client, Client
+    _SUPABASE_DISPONIBLE = True
+except ImportError:
+    _SUPABASE_DISPONIBLE = False
+    Client = None
 import config
 
 logger = logging.getLogger(__name__)
 TZ_CR = ZoneInfo("America/Costa_Rica")
 
-_client: Client = None
+_client = None
 
 
-def get_client() -> Client:
+def get_client():
     global _client
+    if not _SUPABASE_DISPONIBLE:
+        raise RuntimeError("Supabase no está disponible porque la librería no está instalada.")
     if _client is None:
         _client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
     return _client

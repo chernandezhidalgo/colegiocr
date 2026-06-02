@@ -69,9 +69,10 @@ def renovar_token(cookie_str: str) -> str:
     Intenta renovar el WOOTITAPITOKEN usando el WOOTITAPIREFRESHTOKEN.
     Retorna el cookie_str actualizado, o el original si falla.
     """
+    tenant = BASE.split('/')[-1] if '/' in BASE else 'adventistacademy'
     cookies = _parsear_cookies(cookie_str)
-    jwt_actual = cookies.get("WOOTITAPITOKEN", "")
-    refresh_token = cookies.get("WOOTITAPIREFRESHTOKEN", "")
+    jwt_actual = cookies.get("WOOTITAPITOKEN", "") or cookies.get(f"WOOTITAPITOKEN_{tenant}", "")
+    refresh_token = cookies.get("WOOTITAPIREFRESHTOKEN", "") or cookies.get(f"WOOTITAPIREFRESHTOKEN_{tenant}", "")
 
     if not _jwt_expirado(jwt_actual):
         logger.info("✅ JWT vigente — no necesita refresh")
@@ -104,10 +105,16 @@ def renovar_token(cookie_str: str) -> str:
                 nuevo_jwt = (data.get("token") or data.get("accessToken") or
                              data.get("WOOTITAPITOKEN") or data.get("jwt") or "")
                 if nuevo_jwt:
-                    cookies["WOOTITAPITOKEN"] = nuevo_jwt
-                    nuevo_refresh = data.get("refreshToken") or data.get("WOOTITAPIREFRESHTOKEN")
+                    if f"WOOTITAPITOKEN_{tenant}" in cookies:
+                        cookies[f"WOOTITAPITOKEN_{tenant}"] = nuevo_jwt
+                    else:
+                        cookies["WOOTITAPITOKEN"] = nuevo_jwt
+                    nuevo_refresh = data.get("refreshToken") or data.get("WOOTITAPIREFRESHTOKEN") or data.get(f"WOOTITAPIREFRESHTOKEN_{tenant}")
                     if nuevo_refresh:
-                        cookies["WOOTITAPIREFRESHTOKEN"] = nuevo_refresh
+                        if f"WOOTITAPIREFRESHTOKEN_{tenant}" in cookies:
+                            cookies[f"WOOTITAPIREFRESHTOKEN_{tenant}"] = nuevo_refresh
+                        else:
+                            cookies["WOOTITAPIREFRESHTOKEN"] = nuevo_refresh
                     nuevo_str = _cookies_a_string(cookies)
                     logger.info(f"✅ JWT renovado via {endpoint}")
                     _actualizar_secret_github(nuevo_str)
@@ -130,9 +137,12 @@ def renovar_token(cookie_str: str) -> str:
                 }, timeout=10)
                 if r.status_code == 200 and r.text.strip():
                     data = r.json()
-                    nuevo_jwt = (data.get("token") or data.get("WOOTITAPITOKEN") or "")
+                    nuevo_jwt = (data.get("token") or data.get("WOOTITAPITOKEN") or data.get(f"WOOTITAPITOKEN_{tenant}") or "")
                     if nuevo_jwt:
-                        cookies["WOOTITAPITOKEN"] = nuevo_jwt
+                        if f"WOOTITAPITOKEN_{tenant}" in cookies:
+                            cookies[f"WOOTITAPITOKEN_{tenant}"] = nuevo_jwt
+                        else:
+                            cookies["WOOTITAPITOKEN"] = nuevo_jwt
                         nuevo_str = _cookies_a_string(cookies)
                         logger.info(f"✅ JWT renovado via CFC {method}")
                         _actualizar_secret_github(nuevo_str)
@@ -150,8 +160,9 @@ def renovar_token(cookie_str: str) -> str:
             # Cargar cookies de sesión Lucee (las que no expiran)
             for name in ["cfid", "cftoken", "QUSUARIO", "WOOTA", "WOOTP",
                          "WOOTU", "WOOTAUTOLOG", "codigoe-_zldp", "codigoe-_zldt"]:
-                if name in cookies:
-                    s2.cookies.set(name, cookies[name], domain="www.wootit.com")
+                for n in [name, f"{name}_{tenant}"]:
+                    if n in cookies:
+                        s2.cookies.set(n, cookies[n], domain="www.wootit.com")
 
             r = s2.get(f"{BASE}/login/", timeout=15)
             r = s2.post(f"{BASE}/login/",
@@ -160,7 +171,7 @@ def renovar_token(cookie_str: str) -> str:
             if "home" in r.url:
                 # Extraer nuevo JWT de las cookies de respuesta
                 nuevas = {c.name: c.value for c in s2.cookies}
-                nuevo_jwt = nuevas.get("WOOTITAPITOKEN", "")
+                nuevo_jwt = nuevas.get("WOOTITAPITOKEN", "") or nuevas.get(f"WOOTITAPITOKEN_{tenant}", "")
                 if nuevo_jwt:
                     cookies.update(nuevas)
                     nuevo_str = _cookies_a_string(cookies)
